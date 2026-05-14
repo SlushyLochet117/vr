@@ -2,22 +2,28 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gravity Grabber VR - Meta Quest 3</title>
-    <link rel="stylesheet" href="style.css">
+    <title>Gravity Grabber VR</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: Arial; }
+        #info {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            pointer-events: none;
+            z-index: 10;
+        }
+        #score { font-size: 24px; color: #ffaa00; margin-top: 10px; }
+    </style>
 </head>
 <body>
     <div id="info">
         <h2>🔮 Gravity Grabber VR</h2>
-        <p>🔴 Imán (Disparador IZQUIERDO) | 🔵 Repulsor (Disparador DERECHO)</p>
-        <p>🟢 Teletransporte (Grip IZQUIERDO + apuntar)</p>
-        <p>Coloca los cubos en la plataforma dorada ✨</p>
+        <p>🔴 Imán (izquierdo) | 🔵 Repulsor (derecho)</p>
         <div id="score">Puntuación: 0 / 10</div>
-    </div>
-    <div id="controls-info">
-        <p>🎮 Disparador: Activar imán/repulsor</p>
-        <p>✋ Grip izquierdo: Teletransporte</p>
-        <p>🎯 Apunta al suelo y suelta el grip</p>
     </div>
     <script type="importmap">
         {
@@ -27,6 +33,6 @@
             }
         }
     </script>
-    <script type="module" src="main.js"></script>
+    <script type="module" src="./js/main.js"></script>
 </body>
 </html>
