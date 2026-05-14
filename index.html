@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gravity Grabber VR - Meta Quest 3</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="info">
+        <h2>🔮 Gravity Grabber VR</h2>
+        <p>🔴 Imán (Disparador IZQUIERDO) | 🔵 Repulsor (Disparador DERECHO)</p>
+        <p>🟢 Teletransporte (Grip IZQUIERDO + apuntar)</p>
+        <p>Coloca los cubos en la plataforma dorada ✨</p>
+        <div id="score">Puntuación: 0 / 10</div>
+    </div>
+    <div id="controls-info">
+        <p>🎮 Disparador: Activar imán/repulsor</p>
+        <p>✋ Grip izquierdo: Teletransporte</p>
+        <p>🎯 Apunta al suelo y suelta el grip</p>
+    </div>
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "./build/three.module.js",
+                "three/addons/": "./examples/jsm/"
+            }
+        }
+    </script>
+    <script type="module" src="main.js"></script>
+</body>
+</html>
