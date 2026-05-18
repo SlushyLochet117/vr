@@ -83,7 +83,7 @@ export class SwordManager {
     
     createSword() {
         // Hoja de la espada (láser)
-        const bladeGeo = new THREE.CylinderGeometry(0.05, 0.08, 0.8, 8);
+        const bladeGeo = new THREE.CylinderGeometry(0.05, 0.08, 0.12, 8);
         const bladeMat = new THREE.MeshStandardMaterial({ 
             color: 0x44ffaa, 
             emissive: 0x22ff88,
@@ -99,7 +99,7 @@ export class SwordManager {
         const tipGeo = new THREE.SphereGeometry(0.08, 8, 8);
         const tipMat = new THREE.MeshStandardMaterial({ color: 0x88ffcc, emissive: 0x44ffaa });
         const tip = new THREE.Mesh(tipGeo, tipMat);
-        tip.position.y = 0.8;
+        tip.position.y = 0.65;
         this.swordGroup.add(tip);
         
         // Guardamanos
@@ -194,15 +194,19 @@ export class SwordManager {
     
     // ========== OBTENER POSICIÓN ==========
     
-    getSwordPosition() {
-        const tipPos = this.swordGroup.position.clone();
-        const forward = new THREE.Vector3(0, 1, 0).applyQuaternion(this.swordGroup.quaternion);
-        
-        // Si la mega espada está activa, el rango es mayor
-        const range = this.megaSwordActive ? 1.2 : 0.8;
-        tipPos.add(forward.multiplyScalar(range));
-        return tipPos;
-    }
+   getSwordPosition() {
+    // Posición de la PUNTA de la espada (no del mando)
+    const tipPos = this.swordGroup.position.clone();
+    
+    // Calcular dirección hacia adelante (local Y es hacia arriba de la espada)
+    const forward = new THREE.Vector3(0, 1, 0).applyQuaternion(this.swordGroup.quaternion);
+    
+    // La punta está a 1.2 unidades hacia adelante (espada más larga)
+    const bladeLength = this.megaSwordActive ? 1.5 : 1.2;
+    tipPos.add(forward.multiplyScalar(bladeLength));
+    
+    return tipPos;
+}
     
     // ========== MÉTODOS DE ESTADO ==========
     

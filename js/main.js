@@ -32,16 +32,16 @@ const soundManager = new SoundManager();
 // Inicializar sonidos
 soundManager.init();
 
-// ========== VARIABLES DE MANOS ==========
+// ========== VARIABLES ==========
 let rightHand = null;
 let leftHand = null;
 let isSwinging = false;
 let isInVR = false;
 let handTrackingAvailable = false;
 let lastCombo = 1;
-
-// Referencia al objeto espada para poder verla
 let swordObject = null;
+let debugSphere = null;
+let aimDot = null;
 
 // ========== UI ==========
 function updateUI(score, lastPoints) {
@@ -61,7 +61,6 @@ function updateCombo(combo) {
         comboEl.innerHTML = `🔥 x${combo.toFixed(1)}`;
         comboEl.style.color = combo >= 3 ? '#ff66ff' : '#ffaa44';
         
-        // Reproducir sonido de combo cuando aumenta
         if (combo >= 3 && Math.floor(combo) > Math.floor(lastCombo)) {
             soundManager.playCombo(Math.floor(combo));
         }
@@ -96,6 +95,21 @@ function showDesktopUI() {
     if (instructions) instructions.style.display = 'block';
 }
 
+// ========== DEBUG: Mostrar zona de corte ==========
+function showDebugSlice(position) {
+    if (!debugSphere) {
+        const geometry = new THREE.SphereGeometry(0.12, 8, 8);
+        const material = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000 });
+        debugSphere = new THREE.Mesh(geometry, material);
+        scene.add(debugSphere);
+    }
+    debugSphere.position.copy(position);
+    debugSphere.material.emissiveIntensity = 0.8;
+    setTimeout(() => {
+        if (debugSphere) debugSphere.material.emissiveIntensity = 0;
+    }, 50);
+}
+
 // ========== CREAR ESPADA VISIBLE ==========
 function ensureSwordIsVisible() {
     if (swordManager && swordManager.swordGroup) {
@@ -105,187 +119,178 @@ function ensureSwordIsVisible() {
     }
 }
 
-// ========== CONFIGURAR HAND TRACKING ==========
+// ========== CONFIGURAR CONTROLADOR (PRIORITARIO) ==========
+function setupController() {
+    const controller = renderer.xr.getController(0);
+    if (controller) {
+        controller.removeAllListeners();
+        controller.addEventListener('selectstart', () => {
+            isSwinging = true;
+            console.log('🎮 GATILLO - Espada activada!');
+            soundManager.playSlice('powerup');
+            if (swordManager && swordManager.glowLight) {
+                swordManager.glowLight.intensity = 1.5;
+            }
+        });
+        controller.addEventListener('selectend', () => {
+            isSwinging = false;
+            console.log('🎮 GATILLO liberado');
+            if (swordManager && swordManager.glowLight) {
+                setTimeout(() => {
+                    if (swordManager && swordManager.glowLight) swordManager.glowLight.intensity = 0.5;
+                }, 100);
+            }
+        });
+        scene.add(controller);
+        console.log('🎮 Controlador derecho configurado');
+    } else {
+        console.warn('No se encontró controlador');
+    }
+}
+
+// ========== CONFIGURAR HAND TRACKING (OPCIONAL) ==========
 function setupHandTracking() {
     const session = renderer.xr.getSession();
     if (!session) return;
     
-    // IMPORTANTE: SIEMPRE configurar el controlador PRIMERO
-    setupControllerFallback();
-    
-    // Luego intentar manos (opcional)
     const handRight = renderer.xr.getHand(0);
     const handLeft = renderer.xr.getHand(1);
     
     if (handRight) {
         rightHand = handRight;
-        
         rightHand.addEventListener('pinchstart', () => {
             isSwinging = true;
             console.log('🤏 PINCH - Espada activada!');
             soundManager.playSlice('powerup');
-            
             if (swordManager && swordManager.glowLight) {
                 swordManager.glowLight.intensity = 1.5;
-                setTimeout(() => {
-                    if (swordManager && swordManager.glowLight) swordManager.glowLight.intensity = 0.5;
-                }, 200);
-            }
-            
-            if (rightHand.hapticActuators && rightHand.hapticActuators[0]) {
-                rightHand.hapticActuators[0].playEffect('dual-rumble', {
-                    duration: 50,
-                    strongMagnitude: 0.3,
-                    weakMagnitude: 0.2
-                }).catch(() => {});
             }
         });
-        
         rightHand.addEventListener('pinchend', () => {
             isSwinging = false;
+            if (swordManager && swordManager.glowLight) {
+                setTimeout(() => {
+                    if (swordManager && swordManager.glowLight) swordManager.glowLight.intensity = 0.5;
+                }, 100);
+            }
         });
-        
         scene.add(rightHand);
-        console.log('🖐️ Mano DERECHA detectada (opcional)');
+        console.log('🖐️ Mano derecha detectada (opcional)');
     }
     
     if (handLeft) {
         leftHand = handLeft;
         scene.add(leftHand);
-        console.log('🖐️ Mano IZQUIERDA detectada');
-    }
-    
-    ensureSwordIsVisible();
-}
-
-function setupControllerFallback() {
-    const controller = renderer.xr.getController(0);
-    if (controller) {
-        controller.addEventListener('selectstart', () => {
-            isSwinging = true;
-            soundManager.playSlice('powerup');
-            if (swordManager && swordManager.glowLight) {
-                swordManager.glowLight.intensity = 1.5;
-                setTimeout(() => {
-                    if (swordManager && swordManager.glowLight) swordManager.glowLight.intensity = 0.5;
-                }, 200);
-            }
-        });
-        controller.addEventListener('selectend', () => {
-            isSwinging = false;
-        });
-        scene.add(controller);
-        console.log('🎮 Fallback: Usando controlador normal');
+        console.log('🖐️ Mano izquierda detectada');
     }
 }
 
-// ========== ACTUALIZAR ESPADA ==========
-
+// ========== ACTUALIZAR ESPADA (VERSIÓN CORREGIDA) ==========
 function updateSwordWithHand() {
     let swordPos, swordRot;
     let swinging = false;
     
-    // 1. PRIORIDAD 1: CONTROLADOR (MANDO) - ESTO ES LO QUE NECESITAS
+    // PRIORIDAD 1: CONTROLADOR (MANDO)
     const controller = renderer.xr.getController(0);
     
-    if (isInVR && controller && controller.position && controller.position.length() > 0) {
-        // MODO VR CON CONTROLADOR - La espada va en el MANGO
+    if (isInVR && controller && controller.position && controller.position.length() > 0.1) {
         swordPos = controller.position.clone();
         swordRot = controller.quaternion.clone();
         swinging = isSwinging;
         
-        // Ajuste para que la espada salga del controlador (no de la muñeca)
-        const forward = new THREE.Vector3(0, 0.1, 0.5).applyQuaternion(swordRot);
+        // La espada sale desde el controlador hacia adelante
+        const forward = new THREE.Vector3(0, 0.1, 0.45).applyQuaternion(swordRot);
         swordPos.add(forward);
         
         if (swordManager && swordManager.swordGroup) {
             swordManager.swordGroup.visible = true;
         }
-        
     } 
-    // 2. PRIORIDAD 2: HAND TRACKING (solo si NO hay controlador)
+    // PRIORIDAD 2: HAND TRACKING
     else if (isInVR && rightHand) {
         const wristJoint = rightHand.joints['wrist'];
-        
         if (wristJoint && wristJoint.position) {
             swordPos = wristJoint.position.clone();
             swordRot = wristJoint.quaternion.clone();
             swinging = isSwinging;
-            
-            const forward = new THREE.Vector3(0, 0.15, 0.12).applyQuaternion(swordRot);
+            const forward = new THREE.Vector3(0, 0.15, 0.15).applyQuaternion(swordRot);
             swordPos.add(forward);
         } else {
             swordPos = rightHand.position.clone();
             swordRot = rightHand.quaternion.clone();
             swinging = isSwinging;
         }
-        
         if (swordManager && swordManager.swordGroup) {
             swordManager.swordGroup.visible = true;
         }
-        
     } 
-    // 3. PRIORIDAD 3: MODO PC
+    // PRIORIDAD 3: MODO PC
     else if (!isInVR) {
         if (typeof mouseX === 'undefined') return;
-        const forward = new THREE.Vector3();
-        camera.getWorldDirection(forward);
-        swordPos = camera.position.clone().add(forward.multiplyScalar(0.6));
+        const forwardDir = new THREE.Vector3();
+        camera.getWorldDirection(forwardDir);
+        swordPos = camera.position.clone().add(forwardDir.multiplyScalar(0.6));
         swordPos.y -= 0.2;
-        
         const quat = new THREE.Quaternion();
         const euler = new THREE.Euler(-mouseY + 0.5, mouseX, 0, 'YXZ');
         quat.setFromEuler(euler);
         swordRot = quat;
         swinging = desktopSwinging;
     } else {
-        // No hay controlador ni manos
         return;
     }
     
     swordManager.updateSword(swordPos, swordRot, swinging);
     
+    // Obtener la PUNTA de la espada (no el mando)
+    const swordTip = swordManager.getSwordPosition();
+    
+    // === DEBUG: Mostrar dónde está la punta ===
+    showDebugSlice(swordTip);
+    
+    // === PUNTO DE MIRA ===
+    if (!aimDot) {
+        const dotGeo = new THREE.SphereGeometry(0.07, 6, 6);
+        const dotMat = new THREE.MeshStandardMaterial({ color: 0xff3300, emissive: 0xff2200 });
+        aimDot = new THREE.Mesh(dotGeo, dotMat);
+        scene.add(aimDot);
+    }
+    aimDot.position.copy(swordTip);
+    
     if (swinging) {
-        const swordTip = swordManager.getSwordPosition();
+        // Brillo al cortar
+        if (swordManager && swordManager.glowLight) {
+            swordManager.glowLight.intensity = 1.2;
+        }
         
-        // ========== DETECTAR CORTES DE FRUTAS ==========
-        const result = fruitManager.checkSlice(swordTip, 0.8);
+        // DETECTAR CORTES (radio aumentado a 0.9)
+        const result = fruitManager.checkSlice(swordTip, 0.9);
         
         if (result.count > 0) {
+            console.log(`🎯 Corte! +${result.points} pts`);
+            
             const points = gameManager.addPoints(result.points, effectManager, swordTip, 'slice');
             
             if (result.points > 0) {
                 effectManager.createSliceEffect(swordTip, 'fruit');
                 soundManager.playSlice('fruit');
-                if (swordManager && swordManager.glowLight) {
-                    swordManager.glowLight.intensity = 1.2;
-                    setTimeout(() => {
-                        if (swordManager && swordManager.glowLight) swordManager.glowLight.intensity = 0.5;
-                    }, 100);
-                }
+                // Feedback visual: punto de mira verde
+                if (aimDot) aimDot.material.color.setHex(0x00ff00);
+                setTimeout(() => { if (aimDot) aimDot.material.color.setHex(0xff3300); }, 100);
             } else if (result.points < 0) {
                 effectManager.createSliceEffect(swordTip, 'bomb');
                 soundManager.playSlice('bomb');
-                if (swordManager && swordManager.glowLight) {
-                    swordManager.glowLight.intensity = 2.0;
-                    swordManager.glowLight.color.setHex(0xff3300);
-                    setTimeout(() => {
-                        if (swordManager && swordManager.glowLight) {
-                            swordManager.glowLight.intensity = 0.5;
-                            swordManager.glowLight.color.setHex(0x44ffaa);
-                        }
-                    }, 200);
-                }
+                if (aimDot) aimDot.material.color.setHex(0x0000ff);
+                setTimeout(() => { if (aimDot) aimDot.material.color.setHex(0xff3300); }, 100);
             }
         }
         
-        // ========== DETECTAR RECOLECCIÓN DE POWER-UPS ==========
+        // DETECTAR POWER-UPS
         const collectedPowerups = powerUpManager.checkCollection(swordTip, 0.7);
         if (collectedPowerups.length > 0) {
             collectedPowerups.forEach(powerup => {
                 const effect = powerUpManager.activateEffect(powerup, gameManager, fruitManager, swordManager);
-                console.log(`⚡ Power-up: ${effect.icon} ${effect.effect} por ${effect.duration}s`);
-                
+                console.log(`⚡ Power-up: ${effect.icon}`);
                 soundManager.playPowerUp();
                 effectManager.createSliceEffect(swordTip, 'star');
                 showPowerUpNotification(effect);
@@ -314,11 +319,10 @@ function showPowerUpNotification(effect) {
     notification.style.border = `2px solid ${effect.color}`;
     notification.style.boxShadow = `0 0 20px ${effect.color}`;
     document.body.appendChild(notification);
-    
     setTimeout(() => notification.remove(), 2000);
 }
 
-// ========== SIMULACIÓN PARA MODO PC ==========
+// ========== MODO PC ==========
 let desktopSwinging = false;
 let mouseLocked = false;
 let mouseX = 0, mouseY = 0;
@@ -379,16 +383,12 @@ function updateInstructions() {
     const instructionsEl = document.getElementById('instructions');
     if (!instructionsEl) return;
     
-    if (isInVR && handTrackingAvailable) {
-        instructionsEl.innerHTML = '🗡️ ESPADA EN TU MANO | 🤏 PINCH para cortar | ⚡ Corta estrellas para PODERES | 🍎 Frutas = puntos | 💣 Bombas = -puntos | 🔊 Sonidos incluidos!';
-        instructionsEl.style.background = 'rgba(0,0,0,0.8)';
-        instructionsEl.style.color = '#ffaa44';
-    } else if (isInVR) {
-        instructionsEl.innerHTML = '🗡️ ESPADA EN CONTROLADOR | 🎮 Gatillo para cortar | ⚡ Corta estrellas para PODERES | 🔊 Sonidos incluidos!';
+    if (isInVR) {
+        instructionsEl.innerHTML = '🗡️ ESPADA EN CONTROLADOR | 🎮 GATILLO para cortar | 🎯 Apunta con el PUNTO ROJO | ⚡ Corta estrellas para PODERES';
         instructionsEl.style.background = 'rgba(0,0,0,0.8)';
         instructionsEl.style.color = '#ffaa44';
     } else {
-        instructionsEl.innerHTML = '🗡️ MODO PC | 🖱️ CLICK + arrastrar = cortar | W/A/S/D = moverte | ⚡ Corta estrellas para PODERES | 🔊 Sonidos incluidos!';
+        instructionsEl.innerHTML = '🗡️ MODO PC | 🖱️ CLICK + arrastrar = cortar | W/A/S/D = moverte | 🎯 Apunta con el punto rojo';
         instructionsEl.style.background = 'rgba(0,0,0,0.5)';
         instructionsEl.style.color = '#aaa';
     }
@@ -409,7 +409,6 @@ volumeButton.style.cursor = 'pointer';
 volumeButton.style.zIndex = '100';
 volumeButton.style.fontSize = '14px';
 volumeButton.style.fontWeight = 'bold';
-volumeButton.style.fontFamily = 'monospace';
 document.body.appendChild(volumeButton);
 
 let soundEnabled = true;
@@ -434,7 +433,6 @@ vrButton.style.cursor = 'pointer';
 vrButton.style.zIndex = '100';
 vrButton.style.fontSize = '18px';
 vrButton.style.fontWeight = 'bold';
-vrButton.style.fontFamily = 'monospace';
 document.body.appendChild(vrButton);
 
 vrButton.onclick = async () => {
@@ -448,39 +446,71 @@ vrButton.onclick = async () => {
             updateInstructions();
         } else {
             const session = await navigator.xr.requestSession('immersive-vr', {
-                optionalFeatures: ['local-floor', 'hand-tracking']
+                optionalFeatures: ['local-floor']
             });
             await renderer.xr.setSession(session);
             vrButton.textContent = '⬅️ SALIR VR';
             vrButton.style.background = '#ff6688';
             isInVR = true;
-            handTrackingAvailable = true;
             
-            // Reactivar sonido para VR
             soundManager.resume();
             
             setTimeout(() => {
-                setupHandTracking();
+                setupController();  // PRIORIDAD: CONTROLADOR
+                setupHandTracking(); // OPCIONAL: MANOS
                 ensureSwordIsVisible();
                 updateInstructions();
             }, 500);
             
             hideDesktopUI();
-            console.log('🥽 Modo VR - 🗡️ Espada visible en tu mano derecha');
+            console.log('🥽 Modo VR - Espada en CONTROLADOR');
         }
     } catch (err) {
         console.error('Error VR:', err);
-        alert('Error al entrar a VR.\n\nPara usar manos:\n1. Activa Hand Tracking en Ajustes del Quest\n2. Movimientos → Seguimiento manual');
+        alert('Error al entrar a VR');
     }
 };
 
-// ========== EVENTOS DE SESIÓN VR ==========
+// ========== UI EN 3D PARA VR ==========
+let vrUI = null;
+
+function createVRUI() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(1.5, 0.75, 1);
+    sprite.position.set(0, 1.8, -1.2);
+    scene.add(sprite);
+    
+    function updateVRUI(score, combo) {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.font = 'Bold 48px Arial';
+        ctx.fillStyle = '#ffaa44';
+        ctx.textAlign = 'center';
+        ctx.fillText(`🍎 ${Math.floor(score)}`, canvas.width/2, 70);
+        ctx.font = '32px Arial';
+        ctx.fillStyle = combo >= 3 ? '#ff66ff' : '#ffaa44';
+        ctx.fillText(`🔥 x${combo.toFixed(1)}`, canvas.width/2, 140);
+        texture.needsUpdate = true;
+    }
+    
+    return { updateVRUI, sprite };
+}
+
+// Eventos de sesión VR
 renderer.xr.addEventListener('sessionstart', () => {
     isInVR = true;
     hideDesktopUI();
     ensureSwordIsVisible();
     soundManager.resume();
-    console.log('🥽 Sesión VR iniciada - 🗡️ Espada lista');
+    vrUI = createVRUI();
+    console.log('🥽 Sesión VR iniciada');
 });
 
 renderer.xr.addEventListener('sessionend', () => {
@@ -488,19 +518,29 @@ renderer.xr.addEventListener('sessionend', () => {
     handTrackingAvailable = false;
     rightHand = null;
     leftHand = null;
+    if (vrUI) scene.remove(vrUI.sprite);
+    vrUI = null;
     showDesktopUI();
     updateInstructions();
     console.log('🖥️ Sesión VR terminada');
 });
 
+// Actualizar UI VR cuando cambia la puntuación
+const originalUpdateUI = updateUI;
+updateUI = function(score, lastPoints) {
+    originalUpdateUI(score, lastPoints);
+    if (vrUI) vrUI.updateVRUI(score, gameManager.combo);
+};
+
+const originalUpdateCombo = updateCombo;
+updateCombo = function(combo) {
+    originalUpdateCombo(combo);
+    if (vrUI && gameManager) vrUI.updateVRUI(gameManager.score, combo);
+};
+
 // ========== INICIALIZAR ==========
 setupDesktopControls();
 ensureSwordIsVisible();
-
-// Pequeña bienvenida con sonido
-setTimeout(() => {
-    console.log('🔊 Haz clic en la pantalla para activar el sonido!');
-}, 1000);
 
 // ========== LOOP PRINCIPAL ==========
 let lastTime = 0;
@@ -529,74 +569,8 @@ function animate() {
     renderer.setAnimationLoop(animate);
 }
 
-// ========== UI EN 3D PARA VR ==========
-function createVRUI() {
-    // Crear un lienzo de texto en 3D
-    const canvas = document.createElement('canvas');
-    canvas.width = 512;
-    canvas.height = 256;
-    const ctx = canvas.getContext('2d');
-    
-    const texture = new THREE.CanvasTexture(canvas);
-    const material = new THREE.SpriteMaterial({ map: texture });
-    const sprite = new THREE.Sprite(material);
-    sprite.scale.set(1.5, 0.75, 1);
-    sprite.position.set(0, 1.8, -1.2); // Frente a la cara
-    
-    scene.add(sprite);
-    
-    // Función para actualizar el texto
-    function updateVRUI(score, combo) {
-        ctx.fillStyle = 'rgba(0,0,0,0.7)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        ctx.font = 'Bold 48px Arial';
-        ctx.fillStyle = '#ffaa44';
-        ctx.textAlign = 'center';
-        ctx.fillText(`🍎 ${Math.floor(score)}`, canvas.width/2, 70);
-        
-        ctx.font = '32px Arial';
-        ctx.fillStyle = combo >= 3 ? '#ff66ff' : '#ffaa44';
-        ctx.fillText(`🔥 x${combo.toFixed(1)}`, canvas.width/2, 140);
-        
-        ctx.font = '20px Arial';
-        ctx.fillStyle = '#88aaff';
-        ctx.fillText(`⚡ Corta las estrellas`, canvas.width/2, 210);
-        
-        texture.needsUpdate = true;
-    }
-    
-    return { updateVRUI, sprite };
-}
-
-// Inicializar UI VR
-let vrUI = null;
-if (renderer.xr.isPresenting) {
-    vrUI = createVRUI();
-}
-
-// Actualizar UI VR cuando cambia la puntuación
-const originalUpdateUI = updateUI;
-updateUI = function(score, lastPoints) {
-    originalUpdateUI(score, lastPoints);
-    if (vrUI) vrUI.updateVRUI(score, gameManager.combo);
-};
-
-const originalUpdateCombo = updateCombo;
-updateCombo = function(combo) {
-    originalUpdateCombo(combo);
-    if (vrUI && gameManager) vrUI.updateVRUI(gameManager.score, combo);
-};
-
-// En el sessionstart, crear UI VR
-renderer.xr.addEventListener('sessionstart', () => {
-    vrUI = createVRUI();
-});
-
 animate();
 
-console.log('⚔️ SLICE MASTER VR - 🗡️ ESPADA VISIBLE EN TU MANO!');
-console.log('🎮 En VR: La espada aparece en tu mano derecha');
-console.log('🤏 Haz pinch (pellizco) para cortar frutas');
-console.log('⚡ Corta las estrellas flotantes para activar POWER-UPS!');
-console.log('🔊 Con sonidos incluidos - Botón de volumen en esquina inferior izquierda');
+console.log('⚔️ SLICE MASTER VR - CORREGIDO!');
+console.log('🎯 Busca el PUNTO ROJO en la punta de la espada');
+console.log('🎮 Presiona GATILLO y acerca el punto rojo a las frutas');
