@@ -195,7 +195,7 @@ function updateSwordWithHand() {
         swinging = isSwinging;
         
         // Ajuste para que la espada salga del controlador (no de la muñeca)
-        const forward = new THREE.Vector3(0, 0.05, 0.2).applyQuaternion(swordRot);
+        const forward = new THREE.Vector3(0, 0.01, 0.4).applyQuaternion(swordRot);
         swordPos.add(forward);
         
         if (swordManager && swordManager.swordGroup) {
@@ -249,7 +249,7 @@ function updateSwordWithHand() {
         const swordTip = swordManager.getSwordPosition();
         
         // ========== DETECTAR CORTES DE FRUTAS ==========
-        const result = fruitManager.checkSlice(swordTip, 0.45);
+        const result = fruitManager.checkSlice(swordTip, 0.8);
         
         if (result.count > 0) {
             const points = gameManager.addPoints(result.points, effectManager, swordTip, 'slice');
@@ -529,6 +529,69 @@ function animate() {
     renderer.setAnimationLoop(animate);
 }
 
+// ========== UI EN 3D PARA VR ==========
+function createVRUI() {
+    // Crear un lienzo de texto en 3D
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    const material = new THREE.SpriteMaterial({ map: texture });
+    const sprite = new THREE.Sprite(material);
+    sprite.scale.set(1.5, 0.75, 1);
+    sprite.position.set(0, 1.8, -1.2); // Frente a la cara
+    
+    scene.add(sprite);
+    
+    // Función para actualizar el texto
+    function updateVRUI(score, combo) {
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        ctx.font = 'Bold 48px Arial';
+        ctx.fillStyle = '#ffaa44';
+        ctx.textAlign = 'center';
+        ctx.fillText(`🍎 ${Math.floor(score)}`, canvas.width/2, 70);
+        
+        ctx.font = '32px Arial';
+        ctx.fillStyle = combo >= 3 ? '#ff66ff' : '#ffaa44';
+        ctx.fillText(`🔥 x${combo.toFixed(1)}`, canvas.width/2, 140);
+        
+        ctx.font = '20px Arial';
+        ctx.fillStyle = '#88aaff';
+        ctx.fillText(`⚡ Corta las estrellas`, canvas.width/2, 210);
+        
+        texture.needsUpdate = true;
+    }
+    
+    return { updateVRUI, sprite };
+}
+
+// Inicializar UI VR
+let vrUI = null;
+if (renderer.xr.isPresenting) {
+    vrUI = createVRUI();
+}
+
+// Actualizar UI VR cuando cambia la puntuación
+const originalUpdateUI = updateUI;
+updateUI = function(score, lastPoints) {
+    originalUpdateUI(score, lastPoints);
+    if (vrUI) vrUI.updateVRUI(score, gameManager.combo);
+};
+
+const originalUpdateCombo = updateCombo;
+updateCombo = function(combo) {
+    originalUpdateCombo(combo);
+    if (vrUI && gameManager) vrUI.updateVRUI(gameManager.score, combo);
+};
+
+// En el sessionstart, crear UI VR
+renderer.xr.addEventListener('sessionstart', () => {
+    vrUI = createVRUI();
+});
 animate();
 
 console.log('⚔️ SLICE MASTER VR - 🗡️ ESPADA VISIBLE EN TU MANO!');

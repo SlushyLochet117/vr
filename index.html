@@ -84,6 +84,17 @@
             font-family: monospace;
             z-index: 100;
         }
+
+        /* Hacer que el UI sea visible en VR */
+#ui, #score, #combo, #instructions {
+    z-index: 10000;
+    pointer-events: none;
+}
+
+/* En VR, el HTML se superpone */
+body {
+    background-color: transparent;
+}
     </style>
 </head>
 <body>
