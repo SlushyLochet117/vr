@@ -199,10 +199,10 @@ export class SwordManager {
     const tipPos = this.swordGroup.position.clone();
     
     // Calcular dirección hacia adelante (local Y es hacia arriba de la espada)
-    const forward = new THREE.Vector3(0, 1, 0).applyQuaternion(this.swordGroup.quaternion);
+    const forward = new THREE.Vector3(0, 0.1, 1.0).applyQuaternion(this.swordGroup.quaternion);
     
     // La punta está a 1.2 unidades hacia adelante (espada más larga)
-    const bladeLength = this.megaSwordActive ? 1.5 : 1.2;
+    const bladeLength = this.megaSwordActive ? 2.0 : 1.5;
     tipPos.add(forward.multiplyScalar(bladeLength));
     
     return tipPos;

@@ -43,6 +43,9 @@ let swordObject = null;
 let debugSphere = null;
 let aimDot = null;
 
+// ========== VARIABLES PARA JOYSTICK ==========
+let leftStickX = 0, leftStickY = 0;
+
 // ========== UI ==========
 function updateUI(score, lastPoints) {
     const scoreEl = document.getElementById('score');
@@ -98,7 +101,7 @@ function showDesktopUI() {
 // ========== DEBUG: Mostrar zona de corte ==========
 function showDebugSlice(position) {
     if (!debugSphere) {
-        const geometry = new THREE.SphereGeometry(0.12, 8, 8);
+        const geometry = new THREE.SphereGeometry(0.15, 8, 8);
         const material = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000 });
         debugSphere = new THREE.Mesh(geometry, material);
         scene.add(debugSphere);
@@ -119,7 +122,7 @@ function ensureSwordIsVisible() {
     }
 }
 
-// ========== CONFIGURAR CONTROLADOR (PRIORITARIO) ==========
+// ========== CONFIGURAR CONTROLADOR ==========
 function setupController() {
     const controller = renderer.xr.getController(0);
     if (controller) {
@@ -148,7 +151,52 @@ function setupController() {
     }
 }
 
-// ========== CONFIGURAR HAND TRACKING (OPCIONAL) ==========
+// ========== MOVIMIENTO CON JOYSTICK ==========
+function setupVRMovement() {
+    function updateMovementFromGamepad() {
+        if (!isInVR) return;
+        
+        const session = renderer.xr.getSession();
+        if (!session) return;
+        
+        for (let source of session.inputSources) {
+            if (source.handedness === 'left' && source.gamepad) {
+                const axes = source.gamepad.axes;
+                leftStickX = Math.abs(axes[0]) > 0.2 ? axes[0] : 0;
+                leftStickY = Math.abs(axes[1]) > 0.2 ? axes[1] : 0;
+                break;
+            }
+        }
+        
+        requestAnimationFrame(updateMovementFromGamepad);
+    }
+    
+    updateMovementFromGamepad();
+    console.log('🎮 Joystick izquierdo configurado - Úsalo para moverte');
+}
+
+function applyVRMovement(deltaTime) {
+    if (!isInVR) return;
+    if (leftStickX === 0 && leftStickY === 0) return;
+    
+    const speed = 4 * deltaTime;
+    
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    forward.normalize();
+    right.crossVectors(new THREE.Vector3(0, 1, 0), forward);
+    
+    camera.position.x += (right.x * leftStickX + forward.x * leftStickY) * speed;
+    camera.position.z += (right.z * leftStickX + forward.z * leftStickY) * speed;
+    
+    // Limitar movimiento dentro del escenario
+    camera.position.x = Math.max(-12, Math.min(12, camera.position.x));
+    camera.position.z = Math.max(-12, Math.min(12, camera.position.z));
+}
+
+// ========== CONFIGURAR HAND TRACKING ==========
 function setupHandTracking() {
     const session = renderer.xr.getSession();
     if (!session) return;
@@ -175,7 +223,7 @@ function setupHandTracking() {
             }
         });
         scene.add(rightHand);
-        console.log('🖐️ Mano derecha detectada (opcional)');
+        console.log('🖐️ Mano derecha detectada');
     }
     
     if (handLeft) {
@@ -185,35 +233,35 @@ function setupHandTracking() {
     }
 }
 
-// ========== ACTUALIZAR ESPADA (VERSIÓN CORREGIDA) ==========
+// ========== ACTUALIZAR ESPADA ==========
 function updateSwordWithHand() {
     let swordPos, swordRot;
     let swinging = false;
     
-    // PRIORIDAD 1: CONTROLADOR (MANDO)
     const controller = renderer.xr.getController(0);
     
     if (isInVR && controller && controller.position && controller.position.length() > 0.1) {
+        // MODO CONTROLADOR
         swordPos = controller.position.clone();
         swordRot = controller.quaternion.clone();
         swinging = isSwinging;
         
-        // La espada sale desde el controlador hacia adelante
-        const forward = new THREE.Vector3(0, 0.1, 0.45).applyQuaternion(swordRot);
+        // Espada MÁS LARGA (Z = 0.8)
+        const forward = new THREE.Vector3(0, 0.1, 0.8).applyQuaternion(swordRot);
         swordPos.add(forward);
         
         if (swordManager && swordManager.swordGroup) {
             swordManager.swordGroup.visible = true;
         }
     } 
-    // PRIORIDAD 2: HAND TRACKING
     else if (isInVR && rightHand) {
+        // MODO MANOS
         const wristJoint = rightHand.joints['wrist'];
         if (wristJoint && wristJoint.position) {
             swordPos = wristJoint.position.clone();
             swordRot = wristJoint.quaternion.clone();
             swinging = isSwinging;
-            const forward = new THREE.Vector3(0, 0.15, 0.15).applyQuaternion(swordRot);
+            const forward = new THREE.Vector3(0, 0.15, 0.4).applyQuaternion(swordRot);
             swordPos.add(forward);
         } else {
             swordPos = rightHand.position.clone();
@@ -224,8 +272,8 @@ function updateSwordWithHand() {
             swordManager.swordGroup.visible = true;
         }
     } 
-    // PRIORIDAD 3: MODO PC
     else if (!isInVR) {
+        // MODO PC
         if (typeof mouseX === 'undefined') return;
         const forwardDir = new THREE.Vector3();
         camera.getWorldDirection(forwardDir);
@@ -242,15 +290,15 @@ function updateSwordWithHand() {
     
     swordManager.updateSword(swordPos, swordRot, swinging);
     
-    // Obtener la PUNTA de la espada (no el mando)
+    // PUNTA de la espada
     const swordTip = swordManager.getSwordPosition();
     
-    // === DEBUG: Mostrar dónde está la punta ===
+    // DEBUG: Mostrar punta
     showDebugSlice(swordTip);
     
-    // === PUNTO DE MIRA ===
+    // PUNTO DE MIRA
     if (!aimDot) {
-        const dotGeo = new THREE.SphereGeometry(0.07, 6, 6);
+        const dotGeo = new THREE.SphereGeometry(0.1, 8, 8);
         const dotMat = new THREE.MeshStandardMaterial({ color: 0xff3300, emissive: 0xff2200 });
         aimDot = new THREE.Mesh(dotGeo, dotMat);
         scene.add(aimDot);
@@ -258,13 +306,12 @@ function updateSwordWithHand() {
     aimDot.position.copy(swordTip);
     
     if (swinging) {
-        // Brillo al cortar
         if (swordManager && swordManager.glowLight) {
             swordManager.glowLight.intensity = 1.2;
         }
         
-        // DETECTAR CORTES (radio aumentado a 0.9)
-        const result = fruitManager.checkSlice(swordTip, 0.9);
+        // RADIO DE CORTE AUMENTADO (1.2)
+        const result = fruitManager.checkSlice(swordTip, 1.2);
         
         if (result.count > 0) {
             console.log(`🎯 Corte! +${result.points} pts`);
@@ -274,7 +321,6 @@ function updateSwordWithHand() {
             if (result.points > 0) {
                 effectManager.createSliceEffect(swordTip, 'fruit');
                 soundManager.playSlice('fruit');
-                // Feedback visual: punto de mira verde
                 if (aimDot) aimDot.material.color.setHex(0x00ff00);
                 setTimeout(() => { if (aimDot) aimDot.material.color.setHex(0xff3300); }, 100);
             } else if (result.points < 0) {
@@ -285,8 +331,8 @@ function updateSwordWithHand() {
             }
         }
         
-        // DETECTAR POWER-UPS
-        const collectedPowerups = powerUpManager.checkCollection(swordTip, 0.7);
+        // POWER-UPS
+        const collectedPowerups = powerUpManager.checkCollection(swordTip, 0.9);
         if (collectedPowerups.length > 0) {
             collectedPowerups.forEach(powerup => {
                 const effect = powerUpManager.activateEffect(powerup, gameManager, fruitManager, swordManager);
@@ -384,7 +430,7 @@ function updateInstructions() {
     if (!instructionsEl) return;
     
     if (isInVR) {
-        instructionsEl.innerHTML = '🗡️ ESPADA EN CONTROLADOR | 🎮 GATILLO para cortar | 🎯 Apunta con el PUNTO ROJO | ⚡ Corta estrellas para PODERES';
+        instructionsEl.innerHTML = '🗡️ ESPADA EN CONTROLADOR | 🎮 GATILLO para cortar | 🕹️ JOYSTICK IZQUIERDO para moverte | 🎯 Apunta con el PUNTO ROJO';
         instructionsEl.style.background = 'rgba(0,0,0,0.8)';
         instructionsEl.style.color = '#ffaa44';
     } else {
@@ -456,14 +502,15 @@ vrButton.onclick = async () => {
             soundManager.resume();
             
             setTimeout(() => {
-                setupController();  // PRIORIDAD: CONTROLADOR
-                setupHandTracking(); // OPCIONAL: MANOS
+                setupController();
+                setupVRMovement();
+                setupHandTracking();
                 ensureSwordIsVisible();
                 updateInstructions();
             }, 500);
             
             hideDesktopUI();
-            console.log('🥽 Modo VR - Espada en CONTROLADOR');
+            console.log('🥽 Modo VR - Espada larga + Joystick para moverte');
         }
     } catch (err) {
         console.error('Error VR:', err);
@@ -503,7 +550,7 @@ function createVRUI() {
     return { updateVRUI, sprite };
 }
 
-// Eventos de sesión VR
+// ========== EVENTOS DE SESIÓN VR ==========
 renderer.xr.addEventListener('sessionstart', () => {
     isInVR = true;
     hideDesktopUI();
@@ -525,7 +572,7 @@ renderer.xr.addEventListener('sessionend', () => {
     console.log('🖥️ Sesión VR terminada');
 });
 
-// Actualizar UI VR cuando cambia la puntuación
+// Actualizar UI VR
 const originalUpdateUI = updateUI;
 updateUI = function(score, lastPoints) {
     originalUpdateUI(score, lastPoints);
@@ -551,6 +598,7 @@ function animate() {
     lastTime = now;
     
     updateMovement(delta);
+    applyVRMovement(delta);
     updateSwordWithHand();
     fruitManager.update(delta);
     effectManager.update(delta);
@@ -572,5 +620,6 @@ function animate() {
 animate();
 
 console.log('⚔️ SLICE MASTER VR - CORREGIDO!');
-console.log('🎯 Busca el PUNTO ROJO en la punta de la espada');
-console.log('🎮 Presiona GATILLO y acerca el punto rojo a las frutas');
+console.log('🗡️ Espada larga + Radio de corte aumentado');
+console.log('🎮 Joystick izquierdo para moverte');
+console.log('🎯 Apunta con el PUNTO ROJO y presiona GATILLO');
