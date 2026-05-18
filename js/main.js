@@ -110,6 +110,10 @@ function setupHandTracking() {
     const session = renderer.xr.getSession();
     if (!session) return;
     
+    // IMPORTANTE: SIEMPRE configurar el controlador PRIMERO
+    setupControllerFallback();
+    
+    // Luego intentar manos (opcional)
     const handRight = renderer.xr.getHand(0);
     const handLeft = renderer.xr.getHand(1);
     
@@ -142,10 +146,7 @@ function setupHandTracking() {
         });
         
         scene.add(rightHand);
-        console.log('🖐️ Mano DERECHA detectada - La espada está en tu mano!');
-    } else {
-        console.warn('No se detectó mano derecha - Usando controlador normal');
-        setupControllerFallback();
+        console.log('🖐️ Mano DERECHA detectada (opcional)');
     }
     
     if (handLeft) {
@@ -179,11 +180,31 @@ function setupControllerFallback() {
 }
 
 // ========== ACTUALIZAR ESPADA ==========
+
 function updateSwordWithHand() {
     let swordPos, swordRot;
     let swinging = false;
     
-    if (isInVR && rightHand) {
+    // 1. PRIORIDAD 1: CONTROLADOR (MANDO) - ESTO ES LO QUE NECESITAS
+    const controller = renderer.xr.getController(0);
+    
+    if (isInVR && controller && controller.position && controller.position.length() > 0) {
+        // MODO VR CON CONTROLADOR - La espada va en el MANGO
+        swordPos = controller.position.clone();
+        swordRot = controller.quaternion.clone();
+        swinging = isSwinging;
+        
+        // Ajuste para que la espada salga del controlador (no de la muñeca)
+        const forward = new THREE.Vector3(0, 0.05, 0.2).applyQuaternion(swordRot);
+        swordPos.add(forward);
+        
+        if (swordManager && swordManager.swordGroup) {
+            swordManager.swordGroup.visible = true;
+        }
+        
+    } 
+    // 2. PRIORIDAD 2: HAND TRACKING (solo si NO hay controlador)
+    else if (isInVR && rightHand) {
         const wristJoint = rightHand.joints['wrist'];
         
         if (wristJoint && wristJoint.position) {
@@ -203,16 +224,9 @@ function updateSwordWithHand() {
             swordManager.swordGroup.visible = true;
         }
         
-    } else if (isInVR && !rightHand) {
-        const controller = renderer.xr.getController(0);
-        if (controller && controller.position) {
-            swordPos = controller.position.clone();
-            swordRot = controller.quaternion.clone();
-            swinging = isSwinging;
-        } else {
-            return;
-        }
-    } else {
+    } 
+    // 3. PRIORIDAD 3: MODO PC
+    else if (!isInVR) {
         if (typeof mouseX === 'undefined') return;
         const forward = new THREE.Vector3();
         camera.getWorldDirection(forward);
@@ -224,6 +238,9 @@ function updateSwordWithHand() {
         quat.setFromEuler(euler);
         swordRot = quat;
         swinging = desktopSwinging;
+    } else {
+        // No hay controlador ni manos
+        return;
     }
     
     swordManager.updateSword(swordPos, swordRot, swinging);
