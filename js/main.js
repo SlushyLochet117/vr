@@ -195,7 +195,7 @@ function updateSwordWithHand() {
         swinging = isSwinging;
         
         // Ajuste para que la espada salga del controlador (no de la muñeca)
-        const forward = new THREE.Vector3(0, 0.01, 0.4).applyQuaternion(swordRot);
+        const forward = new THREE.Vector3(0, 0.1, 0.5).applyQuaternion(swordRot);
         swordPos.add(forward);
         
         if (swordManager && swordManager.swordGroup) {
@@ -280,7 +280,7 @@ function updateSwordWithHand() {
         }
         
         // ========== DETECTAR RECOLECCIÓN DE POWER-UPS ==========
-        const collectedPowerups = powerUpManager.checkCollection(swordTip, 0.5);
+        const collectedPowerups = powerUpManager.checkCollection(swordTip, 0.7);
         if (collectedPowerups.length > 0) {
             collectedPowerups.forEach(powerup => {
                 const effect = powerUpManager.activateEffect(powerup, gameManager, fruitManager, swordManager);
@@ -592,6 +592,7 @@ updateCombo = function(combo) {
 renderer.xr.addEventListener('sessionstart', () => {
     vrUI = createVRUI();
 });
+
 animate();
 
 console.log('⚔️ SLICE MASTER VR - 🗡️ ESPADA VISIBLE EN TU MANO!');
