@@ -1,349 +1,521 @@
 import * as THREE from 'three';
-import { XRControllerModelFactory } from 'three/addons/webxr/XRControllerModelFactory.js';
+import { createFruitScene } from './scene.js';
+import { SwordManager } from './sword.js';
+import { FruitManager } from './fruits.js';
+import { EffectManager } from './effects.js';
+import { GameManager } from './gameplay.js';
+import { PowerUpManager } from './powerups.js';
+import { SoundManager } from './soundManager.js';
 
-// Estado del juego
-let scene, camera, renderer;
-let leftController, rightController;
-let magnetGroup, repulsorGroup;
-let magnetActive = false, repulsorActive = false;
-let cubes = [];
-let score = 0;
-let targetPlatform;
-let floor;
+// ========== RENDERER ==========
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.xr.enabled = true;
+document.body.appendChild(renderer.domElement);
 
-// Función para actualizar UI
-function updateUI() {
-    document.getElementById('score').innerHTML = `Puntuación: ${score} / 5`;
-    if (score >= 5) {
-        document.getElementById('score').innerHTML += '<br>🎉 ¡VICTORIA! 🎉';
-    }
-}
+// ========== ESCENA ==========
+const { scene, floor, particles } = createFruitScene();
 
-// Crear un cubo
-function createCube(x, z) {
-    const colors = [0xff4444, 0x44ff44, 0x4444ff, 0xffaa44, 0xff44ff];
-    const geometry = new THREE.BoxGeometry(0.5, 0.5, 0.5);
-    const material = new THREE.MeshStandardMaterial({ color: colors[Math.floor(Math.random() * colors.length)] });
-    const cube = new THREE.Mesh(geometry, material);
-    cube.position.set(x, 0.5, z);
-    cube.castShadow = false;
-    cube.receiveShadow = false;
-    scene.add(cube);
-    
-    // Datos de física
-    cube.userData = {
-        velocity: new THREE.Vector3(0, 0, 0),
-        grounded: false
-    };
-    
-    return cube;
-}
+// ========== CÁMARA ==========
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 1.6, 2);
 
-// Física simplificada
-function updatePhysics(cube, deltaTime) {
-    if (!cube.visible) return;
-    
-    // Gravedad
-    if (!cube.userData.grounded) {
-        cube.userData.velocity.y -= 9.8 * deltaTime;
-    }
-    
-    // Mover
-    cube.position.x += cube.userData.velocity.x * deltaTime;
-    cube.position.y += cube.userData.velocity.y * deltaTime;
-    cube.position.z += cube.userData.velocity.z * deltaTime;
-    
-    // Suelo
-    if (cube.position.y - 0.25 <= -0.5) {
-        cube.position.y = -0.25;
-        cube.userData.velocity.y = -cube.userData.velocity.y * 0.5;
-        cube.userData.grounded = true;
-        if (Math.abs(cube.userData.velocity.y) < 0.5) cube.userData.velocity.y = 0;
-    } else {
-        cube.userData.grounded = false;
-    }
-    
-    // Fricción
-    cube.userData.velocity.x *= 0.98;
-    cube.userData.velocity.z *= 0.98;
-}
+// ========== MANAGERS ==========
+const swordManager = new SwordManager(scene, renderer);
+const fruitManager = new FruitManager(scene, camera);
+const effectManager = new EffectManager(scene);
+const gameManager = new GameManager();
+const powerUpManager = new PowerUpManager(scene, camera);
+const soundManager = new SoundManager();
 
-// Aplicar imán y repulsor
-function applyTools() {
-    if (!leftController || !rightController) return;
-    
-    const magnetPos = magnetGroup.position;
-    const repulsorPos = repulsorGroup.position;
-    const strength = 10;
-    const radius = 1.5;
-    
-    cubes.forEach(cube => {
-        if (!cube.visible) return;
-        
-        // Imán
-        if (magnetActive) {
-            const dist = magnetPos.distanceTo(cube.position);
-            if (dist < radius) {
-                const dir = new THREE.Vector3().subVectors(magnetPos, cube.position).normalize();
-                cube.userData.velocity.add(dir.multiplyScalar(strength * (1 - dist/radius) * 0.1));
-            }
+// Inicializar sonidos
+soundManager.init();
+
+// ========== VARIABLES DE MANOS ==========
+let rightHand = null;
+let leftHand = null;
+let isSwinging = false;
+let isInVR = false;
+let handTrackingAvailable = false;
+let lastCombo = 1;
+
+// Referencia al objeto espada para poder verla
+let swordObject = null;
+
+// ========== UI ==========
+function updateUI(score, lastPoints) {
+    const scoreEl = document.getElementById('score');
+    if (scoreEl) {
+        scoreEl.innerHTML = Math.floor(score);
+        if (lastPoints > 0) {
+            scoreEl.style.transform = 'scale(1.2)';
+            setTimeout(() => { if(scoreEl) scoreEl.style.transform = 'scale(1)'; }, 150);
         }
-        
-        // Repulsor
-        if (repulsorActive) {
-            const dist = repulsorPos.distanceTo(cube.position);
-            if (dist < radius) {
-                const dir = new THREE.Vector3().subVectors(cube.position, repulsorPos).normalize();
-                cube.userData.velocity.add(dir.multiplyScalar(strength * (1 - dist/radius) * 0.1));
-            }
-        }
-    });
+    }
 }
 
-// Verificar colisiones con plataforma
-function checkCollisions() {
-    cubes.forEach(cube => {
-        if (!cube.visible) return;
+function updateCombo(combo) {
+    const comboEl = document.getElementById('combo');
+    if (comboEl) {
+        comboEl.innerHTML = `🔥 x${combo.toFixed(1)}`;
+        comboEl.style.color = combo >= 3 ? '#ff66ff' : '#ffaa44';
         
-        const dx = Math.abs(cube.position.x - targetPlatform.position.x);
-        const dz = Math.abs(cube.position.z - targetPlatform.position.z);
+        // Reproducir sonido de combo cuando aumenta
+        if (combo >= 3 && Math.floor(combo) > Math.floor(lastCombo)) {
+            soundManager.playCombo(Math.floor(combo));
+        }
+        lastCombo = combo;
+    }
+    const comboFill = document.getElementById('combo-fill');
+    if (comboFill) {
+        comboFill.style.width = `${(combo / 5) * 100}%`;
+    }
+}
+
+function updateFruitCounter(count) {
+    const fruitCountSpan = document.getElementById('fruit-count');
+    if (fruitCountSpan) fruitCountSpan.textContent = count;
+}
+
+const originalUpdateFruitCounter = fruitManager.updateFruitCounter;
+fruitManager.updateFruitCounter = function() {
+    if (originalUpdateFruitCounter) originalUpdateFruitCounter.call(fruitManager);
+    updateFruitCounter(fruitManager.fruitCount);
+};
+
+gameManager.setCallbacks(updateUI, updateCombo);
+
+function hideDesktopUI() {
+    const instructions = document.getElementById('instructions');
+    if (instructions) instructions.style.display = 'none';
+}
+
+function showDesktopUI() {
+    const instructions = document.getElementById('instructions');
+    if (instructions) instructions.style.display = 'block';
+}
+
+// ========== CREAR ESPADA VISIBLE ==========
+function ensureSwordIsVisible() {
+    if (swordManager && swordManager.swordGroup) {
+        swordObject = swordManager.swordGroup;
+        swordObject.visible = true;
+        console.log('🗡️ Espada visible y lista para usar');
+    }
+}
+
+// ========== CONFIGURAR HAND TRACKING ==========
+function setupHandTracking() {
+    const session = renderer.xr.getSession();
+    if (!session) return;
+    
+    const handRight = renderer.xr.getHand(0);
+    const handLeft = renderer.xr.getHand(1);
+    
+    if (handRight) {
+        rightHand = handRight;
         
-        if (dx < 0.9 && dz < 0.9 && cube.position.y < 0.2) {
-            cube.visible = false;
-            score++;
-            updateUI();
+        rightHand.addEventListener('pinchstart', () => {
+            isSwinging = true;
+            console.log('🤏 PINCH - Espada activada!');
+            soundManager.playSlice('powerup');
             
-            // Respawnear cubo
-            const angle = Math.random() * Math.PI * 2;
-            const radius = 2 + Math.random() * 2;
-            cube.position.set(
-                camera.position.x + Math.cos(angle) * radius,
-                1,
-                camera.position.z + Math.sin(angle) * radius
-            );
-            cube.userData.velocity.set(0, 0, 0);
-            cube.visible = true;
+            if (swordManager && swordManager.glowLight) {
+                swordManager.glowLight.intensity = 1.5;
+                setTimeout(() => {
+                    if (swordManager && swordManager.glowLight) swordManager.glowLight.intensity = 0.5;
+                }, 200);
+            }
+            
+            if (rightHand.hapticActuators && rightHand.hapticActuators[0]) {
+                rightHand.hapticActuators[0].playEffect('dual-rumble', {
+                    duration: 50,
+                    strongMagnitude: 0.3,
+                    weakMagnitude: 0.2
+                }).catch(() => {});
+            }
+        });
+        
+        rightHand.addEventListener('pinchend', () => {
+            isSwinging = false;
+        });
+        
+        scene.add(rightHand);
+        console.log('🖐️ Mano DERECHA detectada - La espada está en tu mano!');
+    } else {
+        console.warn('No se detectó mano derecha - Usando controlador normal');
+        setupControllerFallback();
+    }
+    
+    if (handLeft) {
+        leftHand = handLeft;
+        scene.add(leftHand);
+        console.log('🖐️ Mano IZQUIERDA detectada');
+    }
+    
+    ensureSwordIsVisible();
+}
+
+function setupControllerFallback() {
+    const controller = renderer.xr.getController(0);
+    if (controller) {
+        controller.addEventListener('selectstart', () => {
+            isSwinging = true;
+            soundManager.playSlice('powerup');
+            if (swordManager && swordManager.glowLight) {
+                swordManager.glowLight.intensity = 1.5;
+                setTimeout(() => {
+                    if (swordManager && swordManager.glowLight) swordManager.glowLight.intensity = 0.5;
+                }, 200);
+            }
+        });
+        controller.addEventListener('selectend', () => {
+            isSwinging = false;
+        });
+        scene.add(controller);
+        console.log('🎮 Fallback: Usando controlador normal');
+    }
+}
+
+// ========== ACTUALIZAR ESPADA ==========
+function updateSwordWithHand() {
+    let swordPos, swordRot;
+    let swinging = false;
+    
+    if (isInVR && rightHand) {
+        const wristJoint = rightHand.joints['wrist'];
+        
+        if (wristJoint && wristJoint.position) {
+            swordPos = wristJoint.position.clone();
+            swordRot = wristJoint.quaternion.clone();
+            swinging = isSwinging;
+            
+            const forward = new THREE.Vector3(0, 0.15, 0.12).applyQuaternion(swordRot);
+            swordPos.add(forward);
+        } else {
+            swordPos = rightHand.position.clone();
+            swordRot = rightHand.quaternion.clone();
+            swinging = isSwinging;
+        }
+        
+        if (swordManager && swordManager.swordGroup) {
+            swordManager.swordGroup.visible = true;
+        }
+        
+    } else if (isInVR && !rightHand) {
+        const controller = renderer.xr.getController(0);
+        if (controller && controller.position) {
+            swordPos = controller.position.clone();
+            swordRot = controller.quaternion.clone();
+            swinging = isSwinging;
+        } else {
+            return;
+        }
+    } else {
+        if (typeof mouseX === 'undefined') return;
+        const forward = new THREE.Vector3();
+        camera.getWorldDirection(forward);
+        swordPos = camera.position.clone().add(forward.multiplyScalar(0.6));
+        swordPos.y -= 0.2;
+        
+        const quat = new THREE.Quaternion();
+        const euler = new THREE.Euler(-mouseY + 0.5, mouseX, 0, 'YXZ');
+        quat.setFromEuler(euler);
+        swordRot = quat;
+        swinging = desktopSwinging;
+    }
+    
+    swordManager.updateSword(swordPos, swordRot, swinging);
+    
+    if (swinging) {
+        const swordTip = swordManager.getSwordPosition();
+        
+        // ========== DETECTAR CORTES DE FRUTAS ==========
+        const result = fruitManager.checkSlice(swordTip, 0.45);
+        
+        if (result.count > 0) {
+            const points = gameManager.addPoints(result.points, effectManager, swordTip, 'slice');
+            
+            if (result.points > 0) {
+                effectManager.createSliceEffect(swordTip, 'fruit');
+                soundManager.playSlice('fruit');
+                if (swordManager && swordManager.glowLight) {
+                    swordManager.glowLight.intensity = 1.2;
+                    setTimeout(() => {
+                        if (swordManager && swordManager.glowLight) swordManager.glowLight.intensity = 0.5;
+                    }, 100);
+                }
+            } else if (result.points < 0) {
+                effectManager.createSliceEffect(swordTip, 'bomb');
+                soundManager.playSlice('bomb');
+                if (swordManager && swordManager.glowLight) {
+                    swordManager.glowLight.intensity = 2.0;
+                    swordManager.glowLight.color.setHex(0xff3300);
+                    setTimeout(() => {
+                        if (swordManager && swordManager.glowLight) {
+                            swordManager.glowLight.intensity = 0.5;
+                            swordManager.glowLight.color.setHex(0x44ffaa);
+                        }
+                    }, 200);
+                }
+            }
+        }
+        
+        // ========== DETECTAR RECOLECCIÓN DE POWER-UPS ==========
+        const collectedPowerups = powerUpManager.checkCollection(swordTip, 0.5);
+        if (collectedPowerups.length > 0) {
+            collectedPowerups.forEach(powerup => {
+                const effect = powerUpManager.activateEffect(powerup, gameManager, fruitManager, swordManager);
+                console.log(`⚡ Power-up: ${effect.icon} ${effect.effect} por ${effect.duration}s`);
+                
+                soundManager.playPowerUp();
+                effectManager.createSliceEffect(swordTip, 'star');
+                showPowerUpNotification(effect);
+            });
+        }
+    }
+}
+
+// ========== NOTIFICACIÓN DE POWER-UP ==========
+function showPowerUpNotification(effect) {
+    const notification = document.createElement('div');
+    notification.textContent = `${effect.icon} ${effect.effect} x${effect.duration}s!`;
+    notification.style.position = 'absolute';
+    notification.style.left = '50%';
+    notification.style.top = '30%';
+    notification.style.transform = 'translate(-50%, -50%)';
+    notification.style.background = 'rgba(0,0,0,0.85)';
+    notification.style.color = '#ffaa44';
+    notification.style.padding = '15px 30px';
+    notification.style.borderRadius = '30px';
+    notification.style.fontSize = '24px';
+    notification.style.fontWeight = 'bold';
+    notification.style.zIndex = '1000';
+    notification.style.pointerEvents = 'none';
+    notification.style.fontFamily = 'monospace';
+    notification.style.border = `2px solid ${effect.color}`;
+    notification.style.boxShadow = `0 0 20px ${effect.color}`;
+    document.body.appendChild(notification);
+    
+    setTimeout(() => notification.remove(), 2000);
+}
+
+// ========== SIMULACIÓN PARA MODO PC ==========
+let desktopSwinging = false;
+let mouseLocked = false;
+let mouseX = 0, mouseY = 0;
+const keyState = {};
+
+function setupDesktopControls() {
+    document.addEventListener('click', () => {
+        if (!isInVR) {
+            renderer.domElement.requestPointerLock();
         }
     });
-}
-
-// Teletransporte
-let teleportActive = false;
-let teleportReticle;
-
-function setupTeleport() {
-    const geometry = new THREE.RingGeometry(0.3, 0.4, 16);
-    const material = new THREE.MeshStandardMaterial({ color: 0x00ff00, side: THREE.DoubleSide });
-    teleportReticle = new THREE.Mesh(geometry, material);
-    teleportReticle.rotation.x = -Math.PI / 2;
-    teleportReticle.visible = false;
-    scene.add(teleportReticle);
     
-    if (leftController) {
-        leftController.addEventListener('squeezestart', () => {
-            teleportActive = true;
-        });
-        
-        leftController.addEventListener('squeezeend', () => {
-            if (teleportActive && teleportReticle.visible) {
-                camera.position.set(teleportReticle.position.x, 1.6, teleportReticle.position.z);
-            }
-            teleportActive = false;
-            teleportReticle.visible = false;
-        });
-    }
-}
-
-function updateTeleport() {
-    if (!teleportActive || !leftController) return;
+    document.addEventListener('pointerlockchange', () => {
+        mouseLocked = document.pointerLockElement === renderer.domElement;
+    });
     
-    const raycaster = new THREE.Raycaster(
-        leftController.position,
-        new THREE.Vector3(0, -1, 0).applyQuaternion(leftController.quaternion),
-        0, 3
-    );
-    const hits = raycaster.intersectObject(floor);
-    
-    if (hits.length > 0) {
-        teleportReticle.position.set(hits[0].point.x, -0.48, hits[0].point.z);
-        teleportReticle.visible = true;
-    } else {
-        teleportReticle.visible = false;
-    }
-}
-
-// Configurar herramientas visuales
-function setupTools() {
-    // Imán (izquierda)
-    magnetGroup = new THREE.Group();
-    const magnetBody = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.08, 0.1, 0.3),
-        new THREE.MeshStandardMaterial({ color: 0xcc3333 })
-    );
-    const magnetTip = new THREE.Mesh(
-        new THREE.SphereGeometry(0.12),
-        new THREE.MeshStandardMaterial({ color: 0xff4444 })
-    );
-    magnetTip.position.y = 0.18;
-    magnetGroup.add(magnetBody, magnetTip);
-    scene.add(magnetGroup);
-    
-    // Repulsor (derecha)
-    repulsorGroup = new THREE.Group();
-    const repulsorBody = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.1, 0.12, 0.35),
-        new THREE.MeshStandardMaterial({ color: 0x33aaff })
-    );
-    const repulsorTip = new THREE.Mesh(
-        new THREE.ConeGeometry(0.13, 0.2, 8),
-        new THREE.MeshStandardMaterial({ color: 0x44ccff })
-    );
-    repulsorTip.position.y = 0.22;
-    repulsorGroup.add(repulsorBody, repulsorTip);
-    scene.add(repulsorGroup);
-}
-
-// Inicializar escena
-function setupScene() {
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x050b1a);
-    
-    // Luces
-    const ambient = new THREE.AmbientLight(0x404060);
-    scene.add(ambient);
-    const dirLight = new THREE.DirectionalLight(0xffffff, 1);
-    dirLight.position.set(5, 10, 7);
-    scene.add(dirLight);
-    
-    // Suelo
-    floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(20, 20),
-        new THREE.MeshStandardMaterial({ color: 0x1a2a4a })
-    );
-    floor.rotation.x = -Math.PI / 2;
-    floor.position.y = -0.5;
-    scene.add(floor);
-    
-    // Grid (opcional)
-    const grid = new THREE.GridHelper(20, 20, 0x88aaff, 0x335588);
-    grid.position.y = -0.49;
-    scene.add(grid);
-    
-    // Plataforma objetivo
-    targetPlatform = new THREE.Mesh(
-        new THREE.BoxGeometry(1.5, 0.2, 1.5),
-        new THREE.MeshStandardMaterial({ color: 0xffaa44, emissive: 0x442200 })
-    );
-    targetPlatform.position.set(2, -0.4, 2);
-    scene.add(targetPlatform);
-}
-
-// Inicializar juego
-async function init() {
-    updateStatus('Creando escena...');
-    setupScene();
-    
-    updateStatus('Configurando renderizador...');
-    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-    camera.position.set(0, 1.6, 0);
-    
-    renderer = new THREE.WebGLRenderer({ antialias: false });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    document.body.appendChild(renderer.domElement);
-    
-    updateStatus('Creando objetos...');
-    setupTools();
-    
-    // Crear cubos
-    for (let i = 0; i < 5; i++) {
-        const angle = (i / 5) * Math.PI * 2;
-        const x = Math.cos(angle) * 2.5;
-        const z = Math.sin(angle) * 2.5;
-        cubes.push(createCube(x, z));
-    }
-    
-    updateStatus('Configurando controles...');
-    const controllerFactory = new XRControllerModelFactory();
-    
-    leftController = renderer.xr.getController(0);
-    leftController.addEventListener('selectstart', () => { magnetActive = true; });
-    leftController.addEventListener('selectend', () => { magnetActive = false; });
-    scene.add(leftController);
-    scene.add(renderer.xr.getControllerGrip(0).add(controllerFactory.createControllerModel(renderer.xr.getControllerGrip(0))));
-    
-    rightController = renderer.xr.getController(1);
-    rightController.addEventListener('selectstart', () => { repulsorActive = true; });
-    rightController.addEventListener('selectend', () => { repulsorActive = false; });
-    scene.add(rightController);
-    scene.add(renderer.xr.getControllerGrip(1).add(controllerFactory.createControllerModel(renderer.xr.getControllerGrip(1))));
-    
-    setupTeleport();
-    
-    updateStatus('¡Listo!');
-    
-    // Ocultar loading después de 1 segundo
-    setTimeout(() => {
-        const loading = document.getElementById('loading');
-        if (loading) loading.style.display = 'none';
-    }, 1000);
-    
-    // BOTÓN VR - VERSIÓN CORREGIDA
-    const vrButton = document.getElementById('vrButton');
-    vrButton.onclick = async () => {
-        updateStatus('Solicitando permisos VR...');
-        try {
-            if (renderer.xr.isPresenting) {
-                await renderer.xr.getSession()?.end();
-                vrButton.textContent = '🔮 ENTER VR';
-                vrButton.style.background = '#ff4400';
-            } else {
-                const session = await navigator.xr.requestSession('immersive-vr', {
-                    requiredFeatures: ['local-floor'],
-                    optionalFeatures: ['hand-tracking']
-                });
-                await renderer.xr.setSession(session);
-                vrButton.textContent = '⬅️ SALIR VR';
-                vrButton.style.background = '#ff6688';
-                updateStatus('¡En VR! Usa los controles');
-            }
-        } catch (err) {
-            console.error('Error VR:', err);
-            updateStatus('Error: ' + err.message);
-            alert('No se pudo entrar a VR. Asegúrate de:\n1. Usar Meta Quest Browser\n2. Tener HTTPS (https://)\n3. Aceptar los permisos');
+    document.addEventListener('mousemove', (e) => {
+        if (mouseLocked && !isInVR) {
+            mouseX += e.movementX * 0.002;
+            mouseY += e.movementY * 0.002;
+            camera.rotation.order = 'YXZ';
+            camera.rotation.y = mouseX;
+            camera.rotation.x = Math.max(-Math.PI/2, Math.min(Math.PI/2, mouseY));
         }
-    };
+    });
     
-    // Loop de animación
-    let lastTime = 0;
-    function animate() {
-        const now = performance.now();
-        let delta = Math.min(0.033, (now - lastTime) / 1000);
-        lastTime = now;
-        
-        // Actualizar físicas
-        cubes.forEach(cube => updatePhysics(cube, delta));
-        
-        // Actualizar herramientas
-        if (leftController) magnetGroup.position.copy(leftController.position);
-        if (rightController) repulsorGroup.position.copy(rightController.position);
-        
-        applyTools();
-        checkCollisions();
-        updateTeleport();
-        
-        renderer.render(scene, camera);
-        renderer.setAnimationLoop(animate);
+    document.addEventListener('mousedown', (e) => {
+        if (!isInVR && e.button === 0) desktopSwinging = true;
+    });
+    document.addEventListener('mouseup', (e) => {
+        if (!isInVR && e.button === 0) desktopSwinging = false;
+    });
+    
+    window.addEventListener('keydown', (e) => keyState[e.key] = true);
+    window.addEventListener('keyup', (e) => keyState[e.key] = false);
+}
+
+function updateMovement(deltaTime) {
+    if (isInVR) return;
+    if (!mouseLocked) return;
+    
+    const speed = 4 * deltaTime;
+    const forward = new THREE.Vector3();
+    const right = new THREE.Vector3();
+    camera.getWorldDirection(forward);
+    forward.y = 0;
+    forward.normalize();
+    right.crossVectors(new THREE.Vector3(0, 1, 0), forward);
+    
+    if (keyState['w'] || keyState['W']) camera.position.addScaledVector(forward, speed);
+    if (keyState['s'] || keyState['S']) camera.position.addScaledVector(forward, -speed);
+    if (keyState['a'] || keyState['A']) camera.position.addScaledVector(right, speed);
+    if (keyState['d'] || keyState['D']) camera.position.addScaledVector(right, -speed);
+}
+
+// ========== ACTUALIZAR INSTRUCCIONES ==========
+function updateInstructions() {
+    const instructionsEl = document.getElementById('instructions');
+    if (!instructionsEl) return;
+    
+    if (isInVR && handTrackingAvailable) {
+        instructionsEl.innerHTML = '🗡️ ESPADA EN TU MANO | 🤏 PINCH para cortar | ⚡ Corta estrellas para PODERES | 🍎 Frutas = puntos | 💣 Bombas = -puntos | 🔊 Sonidos incluidos!';
+        instructionsEl.style.background = 'rgba(0,0,0,0.8)';
+        instructionsEl.style.color = '#ffaa44';
+    } else if (isInVR) {
+        instructionsEl.innerHTML = '🗡️ ESPADA EN CONTROLADOR | 🎮 Gatillo para cortar | ⚡ Corta estrellas para PODERES | 🔊 Sonidos incluidos!';
+        instructionsEl.style.background = 'rgba(0,0,0,0.8)';
+        instructionsEl.style.color = '#ffaa44';
+    } else {
+        instructionsEl.innerHTML = '🗡️ MODO PC | 🖱️ CLICK + arrastrar = cortar | W/A/S/D = moverte | ⚡ Corta estrellas para PODERES | 🔊 Sonidos incluidos!';
+        instructionsEl.style.background = 'rgba(0,0,0,0.5)';
+        instructionsEl.style.color = '#aaa';
+    }
+}
+
+// ========== BOTÓN DE VOLUMEN ==========
+const volumeButton = document.createElement('button');
+volumeButton.textContent = '🔊 SONIDO ON';
+volumeButton.style.position = 'absolute';
+volumeButton.style.bottom = '20px';
+volumeButton.style.left = '20px';
+volumeButton.style.padding = '10px 20px';
+volumeButton.style.background = '#333';
+volumeButton.style.color = 'white';
+volumeButton.style.border = 'none';
+volumeButton.style.borderRadius = '8px';
+volumeButton.style.cursor = 'pointer';
+volumeButton.style.zIndex = '100';
+volumeButton.style.fontSize = '14px';
+volumeButton.style.fontWeight = 'bold';
+volumeButton.style.fontFamily = 'monospace';
+document.body.appendChild(volumeButton);
+
+let soundEnabled = true;
+volumeButton.onclick = () => {
+    soundEnabled = soundManager.toggle();
+    volumeButton.textContent = soundEnabled ? '🔊 SONIDO ON' : '🔇 SONIDO OFF';
+    volumeButton.style.background = soundEnabled ? '#333' : '#633';
+};
+
+// ========== BOTÓN VR ==========
+const vrButton = document.createElement('button');
+vrButton.textContent = '🔮 ENTER VR';
+vrButton.style.position = 'absolute';
+vrButton.style.bottom = '20px';
+vrButton.style.right = '20px';
+vrButton.style.padding = '15px 30px';
+vrButton.style.background = '#ff4400';
+vrButton.style.color = 'white';
+vrButton.style.border = 'none';
+vrButton.style.borderRadius = '8px';
+vrButton.style.cursor = 'pointer';
+vrButton.style.zIndex = '100';
+vrButton.style.fontSize = '18px';
+vrButton.style.fontWeight = 'bold';
+vrButton.style.fontFamily = 'monospace';
+document.body.appendChild(vrButton);
+
+vrButton.onclick = async () => {
+    try {
+        if (renderer.xr.isPresenting) {
+            await renderer.xr.getSession()?.end();
+            vrButton.textContent = '🔮 ENTER VR';
+            vrButton.style.background = '#ff4400';
+            isInVR = false;
+            handTrackingAvailable = false;
+            updateInstructions();
+        } else {
+            const session = await navigator.xr.requestSession('immersive-vr', {
+                optionalFeatures: ['local-floor', 'hand-tracking']
+            });
+            await renderer.xr.setSession(session);
+            vrButton.textContent = '⬅️ SALIR VR';
+            vrButton.style.background = '#ff6688';
+            isInVR = true;
+            handTrackingAvailable = true;
+            
+            // Reactivar sonido para VR
+            soundManager.resume();
+            
+            setTimeout(() => {
+                setupHandTracking();
+                ensureSwordIsVisible();
+                updateInstructions();
+            }, 500);
+            
+            hideDesktopUI();
+            console.log('🥽 Modo VR - 🗡️ Espada visible en tu mano derecha');
+        }
+    } catch (err) {
+        console.error('Error VR:', err);
+        alert('Error al entrar a VR.\n\nPara usar manos:\n1. Activa Hand Tracking en Ajustes del Quest\n2. Movimientos → Seguimiento manual');
+    }
+};
+
+// ========== EVENTOS DE SESIÓN VR ==========
+renderer.xr.addEventListener('sessionstart', () => {
+    isInVR = true;
+    hideDesktopUI();
+    ensureSwordIsVisible();
+    soundManager.resume();
+    console.log('🥽 Sesión VR iniciada - 🗡️ Espada lista');
+});
+
+renderer.xr.addEventListener('sessionend', () => {
+    isInVR = false;
+    handTrackingAvailable = false;
+    rightHand = null;
+    leftHand = null;
+    showDesktopUI();
+    updateInstructions();
+    console.log('🖥️ Sesión VR terminada');
+});
+
+// ========== INICIALIZAR ==========
+setupDesktopControls();
+ensureSwordIsVisible();
+
+// Pequeña bienvenida con sonido
+setTimeout(() => {
+    console.log('🔊 Haz clic en la pantalla para activar el sonido!');
+}, 1000);
+
+// ========== LOOP PRINCIPAL ==========
+let lastTime = 0;
+
+function animate() {
+    const now = performance.now();
+    let delta = Math.min(0.033, (now - lastTime) / 1000);
+    lastTime = now;
+    
+    updateMovement(delta);
+    updateSwordWithHand();
+    fruitManager.update(delta);
+    effectManager.update(delta);
+    gameManager.updateTimer(delta);
+    powerUpManager.update(delta);
+    
+    if (Math.floor(now / 1000) !== Math.floor(lastTime / 1000)) {
+        updateInstructions();
     }
     
-    animate();
+    if (particles) {
+        particles.rotation.y += 0.002;
+    }
+    
+    renderer.render(scene, camera);
+    renderer.setAnimationLoop(animate);
 }
 
-function updateStatus(msg) {
-    const statusEl = document.getElementById('status');
-    if (statusEl) statusEl.textContent = msg;
-    console.log(msg);
-}
+animate();
 
-// Iniciar
-init();
+console.log('⚔️ SLICE MASTER VR - 🗡️ ESPADA VISIBLE EN TU MANO!');
+console.log('🎮 En VR: La espada aparece en tu mano derecha');
+console.log('🤏 Haz pinch (pellizco) para cortar frutas');
+console.log('⚡ Corta las estrellas flotantes para activar POWER-UPS!');
+console.log('🔊 Con sonidos incluidos - Botón de volumen en esquina inferior izquierda');
