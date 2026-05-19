@@ -14,6 +14,9 @@ export class SwordManager {
         this.goldenMode = false;
         this.megaSwordActive = false;
         
+        // Array para partículas orbitantes (DEBE estar definido)
+        this.orbitingParticles = [];
+        
         // Crear la espada
         this.createSword();
         
@@ -82,62 +85,61 @@ export class SwordManager {
     // ========== CREAR ESPADA ==========
     
     createSword() {
-        // Hoja de la espada (láser) - CORREGIDO: altura 1.0 en lugar de 0.12
-        const bladeGeo = new THREE.CylinderGeometry(0.05, 0.08, 1.0, 8);
-        const bladeMat = new THREE.MeshStandardMaterial({ 
-            color: 0x44ffaa, 
-            emissive: 0x22ff88,
-            emissiveIntensity: 0.8,
-            metalness: 0.9,
-            roughness: 0.2
-        });
-        const blade = new THREE.Mesh(bladeGeo, bladeMat);
-        blade.position.y = 0.5;  // Ajustado para que la punta esté más arriba
-        this.swordGroup.add(blade);
-        
-        // Punta brillante
-        const tipGeo = new THREE.SphereGeometry(0.1, 8, 8);
-        const tipMat = new THREE.MeshStandardMaterial({ color: 0x88ffcc, emissive: 0x44ffaa });
-        const tip = new THREE.Mesh(tipGeo, tipMat);
-        tip.position.y = 1.0;  // En la punta de la hoja
-        this.swordGroup.add(tip);
-        
-        // Guardamanos
-        const guardGeo = new THREE.BoxGeometry(0.22, 0.08, 0.22);
-        const guardMat = new THREE.MeshStandardMaterial({ color: 0xccaa88, metalness: 0.7 });
-        const guard = new THREE.Mesh(guardGeo, guardMat);
-        guard.position.y = 0.05;
-        this.swordGroup.add(guard);
-        
-        // Mango
-        const handleGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.25, 6);
-        const handleMat = new THREE.MeshStandardMaterial({ color: 0x884422 });
-        const handle = new THREE.Mesh(handleGeo, handleMat);
-        handle.position.y = -0.15;
-        this.swordGroup.add(handle);
-        
-        // Luz alrededor de la espada
-        const glowLight = new THREE.PointLight(0x44ffaa, 0.8, 2.5);
-        this.swordGroup.add(glowLight);
-        this.glowLight = glowLight;
-        
-        // Partículas orbitando
-        this.orbitingParticles = [];
-        for (let i = 0; i < 8; i++) {
-            const particle = new THREE.Mesh(
-                new THREE.SphereGeometry(0.04, 6, 6),
-                new THREE.MeshStandardMaterial({ color: 0x88ffcc, emissive: 0x44ffaa })
-            );
-            this.swordGroup.add(particle);
-            this.orbitingParticles.push(particle);
-        }
-    }
+    // Hoja - ahora apunta hacia adelante (eje Z)
+    const bladeGeo = new THREE.CylinderGeometry(0.08, 0.12, 1.2, 8);
+    const bladeMat = new THREE.MeshStandardMaterial({ 
+        color: 0xff44aa, 
+        emissive: 0xff2288,
+        emissiveIntensity: 1.0,
+    });
+    const blade = new THREE.Mesh(bladeGeo, bladeMat);
+    blade.rotation.x = Math.PI / 2; // Rotar para que apunte hacia adelante
+    blade.position.z = 0.6;
+    this.swordGroup.add(blade);
     
+    // Punta
+    const tipGeo = new THREE.SphereGeometry(0.12, 8, 8);
+    const tipMat = new THREE.MeshStandardMaterial({ color: 0xff88cc, emissive: 0xff44aa });
+    const tip = new THREE.Mesh(tipGeo, tipMat);
+    tip.position.z = 1.2;
+    this.swordGroup.add(tip);
+    
+    // Guardamanos
+    const guardGeo = new THREE.BoxGeometry(0.2, 0.2, 0.1);
+    const guardMat = new THREE.MeshStandardMaterial({ color: 0xccaa88, metalness: 0.7 });
+    const guard = new THREE.Mesh(guardGeo, guardMat);
+    guard.position.z = 0.1;
+    this.swordGroup.add(guard);
+    
+    // Mango
+    const handleGeo = new THREE.CylinderGeometry(0.07, 0.07, 0.25, 6);
+    const handleMat = new THREE.MeshStandardMaterial({ color: 0x884422 });
+    const handle = new THREE.Mesh(handleGeo, handleMat);
+    handle.rotation.x = Math.PI / 2;
+    handle.position.z = -0.2;
+    this.swordGroup.add(handle);
+    
+    // Luz
+    const glowLight = new THREE.PointLight(0xff44aa, 1.0, 4);
+    this.swordGroup.add(glowLight);
+    this.glowLight = glowLight;
+    
+    // Partículas orbitantes
+    this.orbitingParticles = [];
+    for (let i = 0; i < 8; i++) {
+        const particle = new THREE.Mesh(
+            new THREE.SphereGeometry(0.06, 6, 6),
+            new THREE.MeshStandardMaterial({ color: 0xff88cc, emissive: 0xff44aa })
+        );
+        this.swordGroup.add(particle);
+        this.orbitingParticles.push(particle);
+    }
+}
     // ========== CREAR ESTELA (TRAIL) ==========
     
     createTrail() {
         const trailGeometry = new THREE.BufferGeometry();
-        const trailMaterial = new THREE.LineBasicMaterial({ color: 0x44ffaa });
+        const trailMaterial = new THREE.LineBasicMaterial({ color: 0xff44aa });
         this.trailLine = new THREE.Line(trailGeometry, trailMaterial);
         this.scene.add(this.trailLine);
     }
@@ -148,11 +150,11 @@ export class SwordManager {
         
         const points = this.lastPositions.map(p => p.clone());
         const geometry = new THREE.BufferGeometry().setFromPoints(points);
-        this.trailLine.geometry.dispose();
+        if (this.trailLine.geometry) this.trailLine.geometry.dispose();
         this.trailLine.geometry = geometry;
         
         if (this.trailLine.material) {
-            this.trailLine.material.color.setHex(0x44ffaa);
+            this.trailLine.material.color.setHex(0xff44aa);
         }
     }
     
@@ -185,28 +187,29 @@ export class SwordManager {
             }
         }
         
-        const time = now * 0.008 * this.speedMultiplier;
-        this.orbitingParticles.forEach((p, i) => {
-            const angle = time + (i / this.orbitingParticles.length) * Math.PI * 2;
-            p.position.set(Math.cos(angle) * 0.3, 0.3 + Math.sin(angle * 2) * 0.15, Math.sin(angle) * 0.3);
-        });
+        // Animar partículas orbitantes (AHORA this.orbitingParticles SÍ existe)
+        if (this.orbitingParticles && this.orbitingParticles.length > 0) {
+            const time = now * 0.008 * this.speedMultiplier;
+            this.orbitingParticles.forEach((p, i) => {
+                const angle = time + (i / this.orbitingParticles.length) * Math.PI * 2;
+                p.position.set(Math.cos(angle) * 0.35, 0.4 + Math.sin(angle * 2) * 0.2, Math.sin(angle) * 0.35);
+            });
+        }
     }
     
     // ========== OBTENER POSICIÓN DE LA PUNTA ==========
     
-    getSwordPosition() {
-        // Posición de la PUNTA de la espada
-        const tipPos = this.swordGroup.position.clone();
-        
-        // La espada apunta hacia arriba en su espacio local (eje Y)
-        const direction = new THREE.Vector3(0, 1, 0).applyQuaternion(this.swordGroup.quaternion);
-        
-        // Longitud total de la espada (más larga para mega espada)
-        const bladeLength = this.megaSwordActive ? 1.8 : 1.4;
-        tipPos.add(direction.multiplyScalar(bladeLength));
-        
-        return tipPos;
-    }
+  getSwordPosition() {
+    const tipPos = this.swordGroup.position.clone();
+    
+    // La espada ahora apunta hacia ADELANTE (eje Z negativo local)
+    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(this.swordGroup.quaternion);
+    
+    const bladeLength = this.megaSwordActive ? 1.5 : 1.2;
+    tipPos.add(direction.multiplyScalar(bladeLength));
+    
+    return tipPos;
+}
     
     // ========== MÉTODOS DE ESTADO ==========
     

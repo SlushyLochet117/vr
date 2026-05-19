@@ -3,40 +3,199 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>⚔️ SLICE MASTER VR - Corta frutas!</title>
+    <title>⚔️ SLICE MASTER VR - Fruit Ninja Style</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: 'Arial', sans-serif; }
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        /* ========== MENÚ DE INICIO ========== */
+        #startMenu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a2a 0%, #1a1a4a 100%);
+            z-index: 2000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s ease;
+            font-family: monospace;
+        }
+        
+        .menu-container {
+            text-align: center;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(10px);
+            padding: 50px;
+            border-radius: 30px;
+            border: 2px solid #ffaa44;
+            box-shadow: 0 0 50px rgba(255,170,68,0.3);
+            animation: fadeInUp 0.8s ease;
+        }
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .game-title {
+            font-size: 64px;
+            font-weight: bold;
+            color: #ffaa44;
+            text-shadow: 0 0 20px #ffaa44, 0 0 40px #ff6600;
+            margin-bottom: 20px;
+            letter-spacing: 4px;
+        }
+        
+        .game-subtitle {
+            font-size: 20px;
+            color: #88aaff;
+            margin-bottom: 40px;
+        }
+        
+        .menu-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .menu-btn {
+            padding: 15px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-family: monospace;
+            width: 250px;
+        }
+        
+        .menu-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .btn-play {
+            background: linear-gradient(45deg, #ff4400, #ff6600);
+            color: white;
+            box-shadow: 0 0 20px rgba(255,68,0,0.5);
+        }
+        
+        .btn-pc {
+            background: linear-gradient(45deg, #0088ff, #00aaff);
+            color: white;
+        }
+        
+        .btn-instructions {
+            background: #333;
+            color: #ccc;
+        }
+        
+        .controls-info {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #444;
+            color: #888;
+            font-size: 12px;
+            text-align: left;
+        }
+        
+        .controls-info span {
+            color: #ffaa44;
+        }
+        
+        .version {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            color: #555;
+            font-size: 12px;
+        }
+        
+        /* Instrucciones desplegables */
+        .instructions-panel {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(0,0,0,0.8);
+            border-radius: 15px;
+            text-align: left;
+            color: #ccc;
+            font-size: 14px;
+        }
+        
+        .instructions-panel.show {
+            display: block;
+            animation: fadeInUp 0.3s ease;
+        }
+        
+        .instructions-panel h3 {
+            color: #ffaa44;
+            margin-bottom: 15px;
+        }
+        
+        .instructions-panel p {
+            margin: 8px 0;
+        }
+        
+        .close-instructions {
+            margin-top: 15px;
+            padding: 8px 20px;
+            background: #ff4400;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+        
+        /* ========== UI DEL JUEGO ========== */
+        #gameUI {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 100;
+        }
         
         #ui {
             position: absolute;
             top: 20px;
             left: 20px;
-            right: 20px;
-            background: rgba(0,0,0,0.6);
+            background: rgba(0, 0, 0, 0.7);
             backdrop-filter: blur(10px);
             padding: 15px 25px;
             border-radius: 20px;
             color: white;
-            z-index: 100;
-            pointer-events: none;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
             font-family: monospace;
-            border: 1px solid rgba(255,255,255,0.2);
+            border: 1px solid rgba(255, 170, 68, 0.5);
+            pointer-events: none;
         }
         
         #score {
             font-size: 48px;
             font-weight: bold;
             color: #ffaa44;
-            text-shadow: 0 0 20px rgba(255,170,68,0.5);
+            text-shadow: 0 0 10px rgba(255, 170, 68, 0.5);
         }
         
         #combo {
             font-size: 24px;
             color: #ff66ff;
-            font-weight: bold;
         }
         
         #combo-bar {
@@ -46,10 +205,10 @@
             transform: translateX(-50%);
             width: 300px;
             height: 8px;
-            background: rgba(255,255,255,0.2);
+            background: rgba(255, 255, 255, 0.2);
             border-radius: 4px;
             overflow: hidden;
-            z-index: 100;
+            pointer-events: none;
         }
         
         #combo-fill {
@@ -59,61 +218,87 @@
             transition: width 0.1s;
         }
         
-        #instructions {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(0,0,0,0.5);
-            padding: 10px 15px;
-            border-radius: 10px;
-            color: #aaa;
-            font-size: 12px;
-            font-family: monospace;
-            z-index: 100;
-        }
-        
         .fruit-counter {
             position: absolute;
             top: 20px;
             right: 20px;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.6);
             padding: 10px 20px;
             border-radius: 20px;
             color: #ffaa44;
             font-size: 20px;
             font-family: monospace;
-            z-index: 100;
+            pointer-events: none;
         }
-
-        /* Hacer que el UI sea visible en VR */
-#ui, #score, #combo, #instructions {
-    z-index: 10000;
-    pointer-events: none;
-}
-
-/* En VR, el HTML se superpone */
-body {
-    background-color: transparent;
-}
+        
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 15px;
+            border-radius: 10px;
+            color: #aaa;
+            font-size: 12px;
+            font-family: monospace;
+            pointer-events: none;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
-    <div id="ui">
-        <div>⚔️ SLICE MASTER VR</div>
-        <div id="score">0</div>
-        <div id="combo">🔥 x1</div>
+    <!-- MENÚ DE INICIO -->
+    <div id="startMenu">
+        <div class="menu-container">
+            <div class="game-title">⚔️ SLICE MASTER</div>
+            <div class="game-subtitle">Corta frutas, evita bombas, haz combos</div>
+            
+            <div class="menu-buttons">
+                <button class="menu-btn btn-play" id="playVRBtn">🔮 JUGAR EN VR</button>
+                <button class="menu-btn btn-pc" id="playPCBtn">🖥️ JUGAR EN PC</button>
+                <button class="menu-btn btn-instructions" id="instructionsBtn">📖 INSTRUCCIONES</button>
+            </div>
+            
+            <div id="instructionsPanel" class="instructions-panel">
+                <h3>🎮 CÓMO JUGAR</h3>
+                <p>🗡️ <span>VR:</span> Mueve el controlador como espada, gatillo para cortar</p>
+                <p>🗡️ <span>PC:</span> CLICK + arrastrar ratón = cortar | W/A/S/D = moverte</p>
+                <p>🍎 <span>FRUTAS:</span> +10 a +30 puntos</p>
+                <p>💣 <span>BOMBAS:</span> -50 puntos y pierdes combo</p>
+                <p>⭐ <span>ESTRELLAS:</span> Power-ups especiales</p>
+                <p>🔥 <span>COMBO:</span> Corta rápido para multiplicar puntos</p>
+                <button class="close-instructions" id="closeInstructionsBtn">CERRAR</button>
+            </div>
+            
+            <div class="controls-info">
+                💡 <span>Tip:</span> Mantén el combo alto para más puntos<br>
+                🎯 Apunta con el <span>PUNTO ROJO</span> en la punta de la espada
+            </div>
+        </div>
+        <div class="version">v2.0 - Slice Master VR</div>
     </div>
-    <div id="combo-bar">
-        <div id="combo-fill"></div>
+
+    <!-- UI DEL JUEGO (oculto inicialmente) -->
+    <div id="gameUI">
+        <div id="ui">
+            <div>⚔️ SLICE MASTER VR</div>
+            <div id="score">0</div>
+            <div id="combo">🔥 x1</div>
+        </div>
+        <div id="combo-bar">
+            <div id="combo-fill"></div>
+        </div>
+        <div class="fruit-counter">
+            🍎🍊🍉 x <span id="fruit-count">0</span>
+        </div>
+        <div id="instructions">
+            🗡️ ESPADA EN CONTROLADOR | 🎮 GATILLO para cortar
+        </div>
     </div>
-    <div class="fruit-counter" id="fruit-counter">
-        🍎🍊🍉 x <span id="fruit-count">0</span>
-    </div>
-    <div id="instructions">
-        🗡️ Mueve la espada como un samurai | 🎯 Corta frutas | 💣 Evita bombas
-        <br>🖱️ CLICK + arrastrar ratón = modo PC | 🕹️ Gatillo en VR
-    </div>
-    
+
     <script type="importmap">
         {
             "imports": {

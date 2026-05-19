@@ -209,24 +209,43 @@ export class FruitManager {
     // ========== SPAWN ==========
     
     spawnFruitOrBomb() {
-        // 75% fruta, 25% bomba
-        const isBomb = Math.random() < 0.25;
-        const angle = Math.random() * Math.PI * 2;
-        const radius = 3 + Math.random() * 4;
-        const x = this.camera.position.x + Math.cos(angle) * radius;
-        const z = this.camera.position.z + Math.sin(angle) * radius;
-        
-        if (isBomb && this.bombs.length < 4) {
-            const bomb = this.createBomb(x, z);
-            this.bombs.push(bomb);
-        } else {
-            const fruitType = Math.floor(Math.random() * this.fruitTypes.length);
-            const fruit = this.createFruit(fruitType, x, z);
-            this.fruits.push(fruit);
-            this.fruitCount++;
-            this.updateFruitCounter();
-        }
+    // 75% fruta, 25% bomba
+    const isBomb = Math.random() < 0.25;
+    
+    // ========== NUEVO: Ángulo limitado a 180 grados (solo al frente) ==========
+    // En lugar de ángulo completo (0 a 2PI), solo de -90 a +90 grados (frente)
+    const angle = (Math.random() - 0.5) * Math.PI; // -90° a +90°
+    
+    const radius = 3 + Math.random() * 3;
+    
+    // Obtener dirección hacia donde mira la cámara
+    const cameraDirection = new THREE.Vector3();
+    this.camera.getWorldDirection(cameraDirection);
+    cameraDirection.y = 0;
+    cameraDirection.normalize();
+    
+    // Calcular perpendicular (derecha)
+    const right = new THREE.Vector3();
+    right.crossVectors(new THREE.Vector3(0, 1, 0), cameraDirection);
+    
+    // Posición relativa a la cámara (solo al frente)
+    const forwardOffset = cameraDirection.clone().multiplyScalar(Math.cos(angle) * radius);
+    const rightOffset = right.clone().multiplyScalar(Math.sin(angle) * radius);
+    
+    const x = this.camera.position.x + forwardOffset.x + rightOffset.x;
+    const z = this.camera.position.z + forwardOffset.z + rightOffset.z;
+    
+    if (isBomb && this.bombs.length < 4) {
+        const bomb = this.createBomb(x, z);
+        this.bombs.push(bomb);
+    } else {
+        const fruitType = Math.floor(Math.random() * this.fruitTypes.length);
+        const fruit = this.createFruit(fruitType, x, z);
+        this.fruits.push(fruit);
+        this.fruitCount++;
+        this.updateFruitCounter();
     }
+}
     
     // ========== ACTUALIZAR FÍSICA ==========
     
