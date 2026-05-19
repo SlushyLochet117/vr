@@ -159,8 +159,13 @@ function startVRMode() {
     hideMenu();
     startGame();
     
+    // Iniciar verificación del stick con try-catch
     setTimeout(() => {
-        checkWeaponChangeFromStick();
+        try {
+            checkWeaponChangeFromStick();
+        } catch (err) {
+            console.warn('Stick weapon change no disponible:', err);
+        }
     }, 1000);
     
     setTimeout(() => {
@@ -286,40 +291,59 @@ function setupController() {
 // ========== CAMBIAR ARMA CON STICK IZQUIERDO (VR) ==========
 let lastWeaponChange = 0;
 const weaponChangeCooldown = 300;
+let stickCheckRunning = false;
 
 function checkWeaponChangeFromStick() {
-    if (!isInVR) return;
+    if (stickCheckRunning) return;
+    stickCheckRunning = true;
     
-    const session = renderer.xr.getSession();
-    if (!session) return;
-    
-    for (let source of session.inputSources) {
-        if (source.handedness === 'left' && source.gamepad) {
-            const axes = source.gamepad.axes;
-            const stickY = axes[1] || 0;
-            const now = Date.now();
-            
-            if (stickY > 0.7 && now - lastWeaponChange > weaponChangeCooldown) {
-                lastWeaponChange = now;
-                const weapons = ['sword', 'gun', 'bow'];
-                const currentIndex = weapons.indexOf(getCurrentWeapon());
-                const nextWeapon = weapons[(currentIndex + 1) % weapons.length];
-                switchWeapon(nextWeapon);
-                showVRWeaponChange(nextWeapon);
-                console.log(`🔄 Stick: Arma cambiada a: ${nextWeapon}`);
-            } else if (stickY < -0.7 && now - lastWeaponChange > weaponChangeCooldown) {
-                lastWeaponChange = now;
-                const weapons = ['sword', 'gun', 'bow'];
-                const currentIndex = weapons.indexOf(getCurrentWeapon());
-                const prevWeapon = weapons[(currentIndex - 1 + weapons.length) % weapons.length];
-                switchWeapon(prevWeapon);
-                showVRWeaponChange(prevWeapon);
-                console.log(`🔄 Stick: Arma cambiada a: ${prevWeapon}`);
-            }
-            break;
+    function updateStick() {
+        if (!isInVR) {
+            stickCheckRunning = false;
+            return;
         }
+        
+        try {
+            const session = renderer.xr.getSession();
+            if (!session) {
+                requestAnimationFrame(updateStick);
+                return;
+            }
+            
+            for (let source of session.inputSources) {
+                if (source.handedness === 'left' && source.gamepad) {
+                    const axes = source.gamepad.axes;
+                    const stickY = axes[1] || 0;
+                    const now = Date.now();
+                    
+                    if (stickY > 0.7 && now - lastWeaponChange > weaponChangeCooldown) {
+                        lastWeaponChange = now;
+                        const weapons = ['sword', 'gun', 'bow'];
+                        const currentIndex = weapons.indexOf(getCurrentWeapon());
+                        const nextWeapon = weapons[(currentIndex + 1) % weapons.length];
+                        switchWeapon(nextWeapon);
+                        showVRWeaponChange(nextWeapon);
+                        console.log(`🔄 Stick: Arma cambiada a: ${nextWeapon}`);
+                    } else if (stickY < -0.7 && now - lastWeaponChange > weaponChangeCooldown) {
+                        lastWeaponChange = now;
+                        const weapons = ['sword', 'gun', 'bow'];
+                        const currentIndex = weapons.indexOf(getCurrentWeapon());
+                        const prevWeapon = weapons[(currentIndex - 1 + weapons.length) % weapons.length];
+                        switchWeapon(prevWeapon);
+                        showVRWeaponChange(prevWeapon);
+                        console.log(`🔄 Stick: Arma cambiada a: ${prevWeapon}`);
+                    }
+                    break;
+                }
+            }
+        } catch (err) {
+            console.warn('Error en cambio de arma:', err);
+        }
+        
+        requestAnimationFrame(updateStick);
     }
-    requestAnimationFrame(checkWeaponChangeFromStick);
+    
+    updateStick();
 }
 
 // ========== NOTIFICACIÓN VISUAL DE CAMBIO DE ARMA (VR) ==========
@@ -356,19 +380,37 @@ function showVRWeaponChange(weapon) {
 }
 
 // ========== MOVIMIENTO VR ==========
+let movementCheckRunning = false;
+
 function setupVRMovement() {
+    if (movementCheckRunning) return;
+    movementCheckRunning = true;
+    
     function updateMovementFromGamepad() {
-        if (!isInVR) return;
-        const session = renderer.xr.getSession();
-        if (!session) return;
-        for (let source of session.inputSources) {
-            if (source.handedness === 'left' && source.gamepad) {
-                const axes = source.gamepad.axes;
-                leftStickX = Math.abs(axes[0]) > 0.2 ? axes[0] : 0;
-                leftStickY = Math.abs(axes[1]) > 0.2 ? axes[1] : 0;
-                break;
-            }
+        if (!isInVR) {
+            movementCheckRunning = false;
+            return;
         }
+        
+        try {
+            const session = renderer.xr.getSession();
+            if (!session) {
+                requestAnimationFrame(updateMovementFromGamepad);
+                return;
+            }
+            
+            for (let source of session.inputSources) {
+                if (source.handedness === 'left' && source.gamepad) {
+                    const axes = source.gamepad.axes;
+                    leftStickX = Math.abs(axes[0]) > 0.2 ? axes[0] : 0;
+                    leftStickY = Math.abs(axes[1]) > 0.2 ? axes[1] : 0;
+                    break;
+                }
+            }
+        } catch (err) {
+            console.warn('Error en gamepad:', err);
+        }
+        
         requestAnimationFrame(updateMovementFromGamepad);
     }
     updateMovementFromGamepad();
