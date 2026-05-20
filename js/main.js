@@ -159,7 +159,6 @@ function startVRMode() {
     hideMenu();
     startGame();
     
-    // Iniciar verificación del stick con try-catch
     setTimeout(() => {
         try {
             checkWeaponChangeFromStick();
@@ -688,6 +687,7 @@ vrButton.textContent = '🔮 ENTER VR';
 vrButton.style.cssText = 'position:absolute;bottom:20px;right:20px;padding:15px 30px;background:#ff4400;color:white;border:none;border-radius:8px;cursor:pointer;z-index:100;font-size:18px;font-weight:bold;display:none';
 document.body.appendChild(vrButton);
 
+// ========== BOTÓN VR CORREGIDO (CON requiredFeatures) ==========
 vrButton.onclick = async () => {
     try {
         if (renderer.xr.isPresenting) {
@@ -698,12 +698,17 @@ vrButton.onclick = async () => {
             handTrackingAvailable = false;
             updateInstructions();
         } else {
-            const session = await navigator.xr.requestSession('immersive-vr');
+            // 🔧 SOLUCIÓN DEFINITIVA PARA requestReferenceSpace
+            const session = await navigator.xr.requestSession('immersive-vr', {
+                requiredFeatures: ['local-floor']
+            });
+            
             await renderer.xr.setSession(session);
             vrButton.textContent = '⬅️ SALIR VR';
             vrButton.style.background = '#ff6688';
             isInVR = true;
             soundManager.resume();
+            
             setTimeout(() => {
                 setupController();
                 setupVRMovement();
@@ -711,12 +716,20 @@ vrButton.onclick = async () => {
                 ensureSwordIsVisible();
                 updateInstructions();
             }, 500);
+            
             hideDesktopUI();
             console.log('🥽 Modo VR activado');
         }
     } catch (err) {
         console.error('Error VR:', err);
-        alert('Error al entrar a VR: ' + err.message);
+        
+        let errorMsg = 'Error al entrar a VR.\n\n';
+        if (err.message.includes('reference space')) {
+            errorMsg += 'SOLUCIÓN:\n1. Cierra el navegador en las gafas\n2. Borra caché (Ajustes → Apps → Navegador)\n3. Reinicia las gafas\n4. Vuelve a abrir la página';
+        } else {
+            errorMsg += err.message;
+        }
+        alert(errorMsg);
     }
 };
 
