@@ -245,12 +245,16 @@ function ensureSwordIsVisible() {
     }
 }
 
-// ========== CONTROLADOR VR ==========
+// ========== CONTROLADOR VR (CON LOGS DE DEPURACIÓN) ==========
 function setupController() {
     const controller = renderer.xr.getController(0);
     if (controller) {
+        console.log('✅ Controlador VR detectado');
+        
         controller.addEventListener('selectstart', () => {
+            console.log('🎮 GATILLO PRESIONADO EN VR');
             const currentWeapon = getCurrentWeapon();
+            console.log('Arma actual:', currentWeapon);
             
             if (currentWeapon === 'gun') {
                 shootGun(fruitManager, effectManager, soundManager, gameManager, camera, scene);
@@ -268,6 +272,7 @@ function setupController() {
         });
         
         controller.addEventListener('selectend', () => {
+            console.log('🎮 GATILLO LIBERADO EN VR');
             const currentWeapon = getCurrentWeapon();
             
             if (currentWeapon === 'bow') {
@@ -283,7 +288,10 @@ function setupController() {
         });
         
         scene.add(controller);
-        console.log('🎮 Controlador configurado');
+        console.log('🎮 Controlador VR configurado correctamente');
+    } else {
+        console.warn('⏳ Esperando controlador VR...');
+        setTimeout(setupController, 500);
     }
 }
 
@@ -469,6 +477,11 @@ function updateSwordWithHand() {
     const controller = renderer.xr.getController(0);
     
     if (isInVR && controller && controller.position && controller.position.length() > 0.1) {
+        // Log para depuración (solo cada 60 frames para no saturar)
+        if (Math.random() < 0.02) {
+            console.log('📍 Posición controlador:', controller.position);
+        }
+        
         swordPos = controller.position.clone();
         const forwardDir = new THREE.Vector3(0, 0, -1).applyQuaternion(controller.quaternion);
         const upDir = new THREE.Vector3(0, 1, 0);
@@ -650,7 +663,7 @@ function updateInstructions() {
     if (!instructionsEl) return;
     
     if (gameMode === 'vr' && isInVR) {
-        instructionsEl.innerHTML = '⚔️ STICK ARRIBA/ABAJO cambia arma | 🗡️ Espada | 🔫 Pistola | 🏹 Arco';
+        instructionsEl.innerHTML = '⚔️ STICK ARRIBA/ABAJO cambia arma | 🗡️ Espada (corte auto) | 🔫 Pistola (gatillo) | 🏹 Arco (mantener gatillo)';
         instructionsEl.style.background = 'rgba(0,0,0,0.8)';
         instructionsEl.style.color = '#ffaa44';
     } else if (gameMode === 'pc') {
@@ -687,7 +700,6 @@ vrButton.textContent = '🔮 ENTER VR';
 vrButton.style.cssText = 'position:absolute;bottom:20px;right:20px;padding:15px 30px;background:#ff4400;color:white;border:none;border-radius:8px;cursor:pointer;z-index:100;font-size:18px;font-weight:bold;display:none';
 document.body.appendChild(vrButton);
 
-// ========== BOTÓN VR CORREGIDO (CON requiredFeatures) ==========
 vrButton.onclick = async () => {
     try {
         if (renderer.xr.isPresenting) {
@@ -698,7 +710,6 @@ vrButton.onclick = async () => {
             handTrackingAvailable = false;
             updateInstructions();
         } else {
-            // 🔧 SOLUCIÓN DEFINITIVA PARA requestReferenceSpace
             const session = await navigator.xr.requestSession('immersive-vr', {
                 requiredFeatures: ['local-floor']
             });
@@ -725,7 +736,7 @@ vrButton.onclick = async () => {
         
         let errorMsg = 'Error al entrar a VR.\n\n';
         if (err.message.includes('reference space')) {
-            errorMsg += 'SOLUCIÓN:\n1. Cierra el navegador en las gafas\n2. Borra caché (Ajustes → Apps → Navegador)\n3. Reinicia las gafas\n4. Vuelve a abrir la página';
+            errorMsg += 'SOLUCIÓN:\n1. Cierra el navegador en las gafas\n2. Borra caché\n3. Reinicia las gafas';
         } else {
             errorMsg += err.message;
         }
@@ -767,7 +778,7 @@ renderer.xr.addEventListener('sessionstart', () => {
     soundManager.resume();
     vrUI = createVRUI();
     soundManager.startBackgroundMusic();
-    console.log('🥽 Sesión VR iniciada');
+    console.log('🥽 Sesión VR iniciada - Busca el PUNTO ROJO en la espada');
 });
 
 renderer.xr.addEventListener('sessionend', () => {
@@ -836,3 +847,4 @@ animate();
 console.log('⚔️ SLICE MASTER VR - Con ARMAS!');
 console.log('🗡️ ESPADA | 🔫 PISTOLA | 🏹 ARCO');
 console.log('🎮 En VR: Stick arriba/abajo cambia de arma');
+console.log('🔍 Depuración: Mira la consola (chrome://inspect) para ver logs');
