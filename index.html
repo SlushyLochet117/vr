@@ -1,346 +1,312 @@
 <!DOCTYPE html>
-<html>
+<html lang="es">
 <head>
-    <title>VR Test - Slice Master</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚔️ SLICE MASTER VR - Fruit Ninja Style</title>
     <style>
-        body { margin: 0; overflow: hidden; font-family: monospace; }
-        #info {
-            position: absolute;
-            top: 20px;
-            left: 20px;
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        /* ========== MENÚ DE INICIO ========== */
+        #startMenu {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #0a0a2a 0%, #1a1a4a 100%);
+            z-index: 2000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            transition: opacity 0.5s ease;
+            font-family: monospace;
+        }
+        
+        .menu-container {
+            text-align: center;
             background: rgba(0,0,0,0.7);
-            padding: 15px;
-            border-radius: 10px;
-            color: white;
-            z-index: 100;
-            pointer-events: none;
+            backdrop-filter: blur(10px);
+            padding: 50px;
+            border-radius: 30px;
+            border: 2px solid #ffaa44;
+            box-shadow: 0 0 50px rgba(255,170,68,0.3);
+            animation: fadeInUp 0.8s ease;
         }
-        #status {
-            color: #ffaa44;
+        
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        .game-title {
+            font-size: 64px;
             font-weight: bold;
+            color: #ffaa44;
+            text-shadow: 0 0 20px #ffaa44, 0 0 40px #ff6600;
+            margin-bottom: 20px;
+            letter-spacing: 4px;
         }
-        button {
+        
+        .game-subtitle {
+            font-size: 20px;
+            color: #88aaff;
+            margin-bottom: 40px;
+        }
+        
+        .menu-buttons {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
+        
+        .menu-btn {
+            padding: 15px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+            font-family: monospace;
+            width: 250px;
+        }
+        
+        .menu-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .btn-play {
+            background: linear-gradient(45deg, #ff4400, #ff6600);
+            color: white;
+            box-shadow: 0 0 20px rgba(255,68,0,0.5);
+        }
+        
+        .btn-pc {
+            background: linear-gradient(45deg, #0088ff, #00aaff);
+            color: white;
+        }
+        
+        .btn-instructions {
+            background: #333;
+            color: #ccc;
+        }
+        
+        .controls-info {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #444;
+            color: #888;
+            font-size: 12px;
+            text-align: left;
+        }
+        
+        .controls-info span {
+            color: #ffaa44;
+        }
+        
+        .version {
             position: absolute;
             bottom: 20px;
             right: 20px;
-            padding: 15px 30px;
+            color: #555;
+            font-size: 12px;
+        }
+        
+        /* Instrucciones desplegables */
+        .instructions-panel {
+            display: none;
+            margin-top: 20px;
+            padding: 20px;
+            background: rgba(0,0,0,0.8);
+            border-radius: 15px;
+            text-align: left;
+            color: #ccc;
+            font-size: 14px;
+        }
+        
+        .instructions-panel.show {
+            display: block;
+            animation: fadeInUp 0.3s ease;
+        }
+        
+        .instructions-panel h3 {
+            color: #ffaa44;
+            margin-bottom: 15px;
+        }
+        
+        .instructions-panel p {
+            margin: 8px 0;
+        }
+        
+        .close-instructions {
+            margin-top: 15px;
+            padding: 8px 20px;
             background: #ff4400;
             color: white;
             border: none;
-            border-radius: 10px;
-            font-size: 18px;
+            border-radius: 20px;
             cursor: pointer;
+        }
+        
+        /* ========== UI DEL JUEGO ========== */
+        #gameUI {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
             z-index: 100;
+        }
+        
+        #ui {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            padding: 15px 25px;
+            border-radius: 20px;
+            color: white;
+            font-family: monospace;
+            border: 1px solid rgba(255, 170, 68, 0.5);
+            pointer-events: none;
+        }
+        
+        #score {
+            font-size: 48px;
+            font-weight: bold;
+            color: #ffaa44;
+            text-shadow: 0 0 10px rgba(255, 170, 68, 0.5);
+        }
+        
+        #combo {
+            font-size: 24px;
+            color: #ff66ff;
+        }
+        
+        #combo-bar {
+            position: absolute;
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 300px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        
+        #combo-fill {
+            width: 0%;
+            height: 100%;
+            background: linear-gradient(90deg, #ff66ff, #ffaa44);
+            transition: width 0.1s;
+        }
+        
+        .fruit-counter {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: #ffaa44;
+            font-size: 20px;
+            font-family: monospace;
+            pointer-events: none;
+        }
+        
+        #instructions {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 15px;
+            border-radius: 10px;
+            color: #aaa;
+            font-size: 12px;
+            font-family: monospace;
+            pointer-events: none;
+        }
+        
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
     </style>
 </head>
 <body>
-    <div id="info">
-        <h2>🗡️ SLICE MASTER VR - TEST</h2>
-        <div>Punto rojo = zona de corte</div>
-        <div id="status">✅ Cargado</div>
+    <!-- MENÚ DE INICIO -->
+    <div id="startMenu">
+        <div class="menu-container">
+            <div class="game-title">⚔️ SLICE MASTER</div>
+            <div class="game-subtitle">Corta frutas, evita bombas, haz combos</div>
+            
+            <div class="menu-buttons">
+                <button class="menu-btn btn-play" id="playVRBtn">🔮 JUGAR EN VR</button>
+                <button class="menu-btn btn-pc" id="playPCBtn">🖥️ JUGAR EN PC</button>
+                <button class="menu-btn btn-instructions" id="instructionsBtn">📖 INSTRUCCIONES</button>
+            </div>
+            
+            <div id="instructionsPanel" class="instructions-panel">
+                <h3>🎮 CÓMO JUGAR</h3>
+                <p>🗡️ <span>VR:</span> Mueve el controlador como espada, gatillo para cortar</p>
+                <p>🗡️ <span>PC:</span> CLICK + arrastrar ratón = cortar | W/A/S/D = moverte</p>
+                <p>🍎 <span>FRUTAS:</span> +10 a +30 puntos</p>
+                <p>💣 <span>BOMBAS:</span> -50 puntos y pierdes combo</p>
+                <p>⭐ <span>ESTRELLAS:</span> Power-ups especiales</p>
+                <p>🔥 <span>COMBO:</span> Corta rápido para multiplicar puntos</p>
+                <button class="close-instructions" id="closeInstructionsBtn">CERRAR</button>
+            </div>
+            
+            <div class="controls-info">
+                💡 <span>Tip:</span> Mantén el combo alto para más puntos<br>
+                🎯 Apunta con el <span>PUNTO ROJO</span> en la punta de la espada
+            </div>
+        </div>
+        <div class="version">v2.0 - Slice Master VR</div>
     </div>
-    <button id="vrBtn">🔮 ENTER VR</button>
+
+    <!-- UI DEL JUEGO (oculto inicialmente) -->
+    <div id="gameUI">
+        <div id="ui">
+            <div>⚔️ SLICE MASTER VR</div>
+            <div id="score">0</div>
+            <div id="combo">🔥 x1</div>
+        </div>
+        <div id="combo-bar">
+            <div id="combo-fill"></div>
+        </div>
+        <div class="fruit-counter">
+            🍎🍊🍉 x <span id="fruit-count">0</span>
+        </div>
+        <div id="instructions">
+            🗡️ ESPADA EN CONTROLADOR | 🎮 GATILLO para cortar
+        </div>
+    </div>
 
     <script type="importmap">
         {
             "imports": {
-                "three": "./build/three.module.js"
+                "three": "./build/three.module.js",
+                "three/addons/": "./examples/jsm/"
             }
         }
     </script>
-
-    <script type="module">
-        import * as THREE from 'three';
-
-        // ========== CONFIGURACIÓN ==========
-        const scene = new THREE.Scene();
-        scene.background = new THREE.Color(0x0a0a2a);
-        scene.fog = new THREE.FogExp2(0x0a0a2a, 0.03);
-
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 1.6, 2);
-
-        const renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.xr.enabled = true;
-        document.body.appendChild(renderer.domElement);
-
-        // ========== LUCES ==========
-        const ambient = new THREE.AmbientLight(0x404060);
-        scene.add(ambient);
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(5, 10, 7);
-        scene.add(light);
-
-        // ========== SUELO ==========
-        const grid = new THREE.GridHelper(15, 20, 0x88aaff, 0x335588);
-        grid.position.y = -0.8;
-        scene.add(grid);
-
-        // ========== FRUTAS ==========
-        const fruits = [];
-        const colors = [0xff3333, 0xffaa33, 0x33ff33, 0xff44aa, 0xffaa44];
-        
-        function spawnFruit() {
-            const color = colors[Math.floor(Math.random() * colors.length)];
-            const fruit = new THREE.Mesh(
-                new THREE.SphereGeometry(0.25, 16, 16),
-                new THREE.MeshStandardMaterial({ color: color })
-            );
-            
-            // Posición aleatoria alrededor del jugador
-            const angle = Math.random() * Math.PI * 2;
-            const radius = 2 + Math.random() * 3;
-            fruit.position.set(
-                camera.position.x + Math.cos(angle) * radius,
-                0.3 + Math.random() * 1.5,
-                camera.position.z + Math.sin(angle) * radius
-            );
-            
-            fruit.userData = {
-                velocity: new THREE.Vector3(
-                    (Math.random() - 0.5) * 2,
-                    Math.random() * 3 + 2,
-                    (Math.random() - 0.5) * 2
-                ),
-                gravity: 10
-            };
-            
-            scene.add(fruit);
-            fruits.push(fruit);
-        }
-
-        // Spawn inicial
-        for (let i = 0; i < 8; i++) spawnFruit();
-        setInterval(() => {
-            if (fruits.length < 10) spawnFruit();
-        }, 1500);
-
-        // ========== ESPADA ==========
-        const swordGroup = new THREE.Group();
-        
-        // Hoja
-        const blade = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.05, 0.08, 0.8, 6),
-            new THREE.MeshStandardMaterial({ color: 0x44ffaa, emissive: 0x22ff88 })
-        );
-        blade.position.y = 0.4;
-        swordGroup.add(blade);
-        
-        // Punta
-        const tip = new THREE.Mesh(
-            new THREE.SphereGeometry(0.08, 6, 6),
-            new THREE.MeshStandardMaterial({ color: 0x88ffcc, emissive: 0x44ffaa })
-        );
-        tip.position.y = 0.85;
-        swordGroup.add(tip);
-        
-        // Mango
-        const handle = new THREE.Mesh(
-            new THREE.CylinderGeometry(0.07, 0.07, 0.2, 6),
-            new THREE.MeshStandardMaterial({ color: 0x884422 })
-        );
-        handle.position.y = -0.1;
-        swordGroup.add(handle);
-        
-        scene.add(swordGroup);
-
-        // Punto rojo de debug (zona de corte)
-        const dotGeo = new THREE.SphereGeometry(0.1, 6, 6);
-        const dotMat = new THREE.MeshStandardMaterial({ color: 0xff0000, emissive: 0xff0000 });
-        const aimDot = new THREE.Mesh(dotGeo, dotMat);
-        scene.add(aimDot);
-
-        // ========== VARIABLES VR ==========
-        let isInVR = false;
-        let isSwinging = false;
-        let score = 0;
-        const scoreDiv = document.getElementById('status');
-
-        function updateScore(points) {
-            score += points;
-            scoreDiv.innerHTML = `🍎 Puntos: ${score} | 🔴 Acerca el punto rojo a las frutas`;
-        }
-
-        // ========== CONTROLADOR VR ==========
-        function setupController() {
-            const controller = renderer.xr.getController(0);
-            if (controller) {
-                console.log('✅ Controlador detectado');
-                controller.addEventListener('selectstart', () => {
-                    console.log('🎮 GATILLO');
-                    isSwinging = true;
-                });
-                controller.addEventListener('selectend', () => {
-                    isSwinging = false;
-                });
-                scene.add(controller);
-            } else {
-                setTimeout(setupController, 500);
-            }
-        }
-
-        // ========== ACTUALIZAR ESPADA ==========
-        function updateSword() {
-            const controller = renderer.xr.getController(0);
-            
-            if (isInVR && controller && controller.position) {
-                // Posición de la espada
-                swordGroup.position.copy(controller.position);
-                
-                // Rotación para que apunte hacia adelante
-                const forwardDir = new THREE.Vector3(0, 0, -1).applyQuaternion(controller.quaternion);
-                const upDir = new THREE.Vector3(0, 1, 0);
-                const quat = new THREE.Quaternion();
-                quat.setFromUnitVectors(upDir, forwardDir);
-                swordGroup.quaternion.copy(quat);
-                
-                // Pequeño offset
-                const offset = forwardDir.clone().multiplyScalar(0.2);
-                swordGroup.position.add(offset);
-                
-                // Posición de la punta de la espada
-                const tipPos = swordGroup.position.clone();
-                const direction = new THREE.Vector3(0, 1, 0).applyQuaternion(swordGroup.quaternion);
-                tipPos.add(direction.multiplyScalar(0.9));
-                aimDot.position.copy(tipPos);
-                
-                // CORTE AUTOMÁTICO (radio grande)
-                for (let i = 0; i < fruits.length; i++) {
-                    const fruit = fruits[i];
-                    const dist = tipPos.distanceTo(fruit.position);
-                    if (dist < 0.6) {
-                        // Cortar fruta
-                        scene.remove(fruit);
-                        fruits.splice(i, 1);
-                        updateScore(10);
-                        spawnFruit(); // Nueva fruta
-                        
-                        // Efecto visual
-                        aimDot.material.color.setHex(0x00ff00);
-                        setTimeout(() => aimDot.material.color.setHex(0xff0000), 100);
-                        break;
-                    }
-                }
-            }
-        }
-
-        // ========== ACTUALIZAR FRUTAS (física) ==========
-        function updateFruits(deltaTime) {
-            for (let i = 0; i < fruits.length; i++) {
-                const fruit = fruits[i];
-                fruit.userData.velocity.y -= fruit.userData.gravity * deltaTime;
-                fruit.position.x += fruit.userData.velocity.x * deltaTime;
-                fruit.position.y += fruit.userData.velocity.y * deltaTime;
-                fruit.position.z += fruit.userData.velocity.z * deltaTime;
-                fruit.rotation.x += deltaTime * 2;
-                fruit.rotation.y += deltaTime * 3;
-                
-                // Eliminar si cae al suelo
-                if (fruit.position.y < -0.8) {
-                    scene.remove(fruit);
-                    fruits.splice(i, 1);
-                    i--;
-                }
-            }
-        }
-
-        // ========== MOVIMIENTO CON JOYSTICK ==========
-        let leftStickX = 0, leftStickY = 0;
-
-        function setupVRMovement() {
-            function updateGamepad() {
-                if (!isInVR) return;
-                const session = renderer.xr.getSession();
-                if (!session) return;
-                for (let source of session.inputSources) {
-                    if (source.handedness === 'left' && source.gamepad) {
-                        const axes = source.gamepad.axes;
-                        leftStickX = Math.abs(axes[0]) > 0.2 ? axes[0] : 0;
-                        leftStickY = Math.abs(axes[1]) > 0.2 ? axes[1] : 0;
-                        break;
-                    }
-                }
-                requestAnimationFrame(updateGamepad);
-            }
-            updateGamepad();
-        }
-
-        function applyMovement(deltaTime) {
-            if (!isInVR) return;
-            if (leftStickX === 0 && leftStickY === 0) return;
-            
-            const speed = 4 * deltaTime;
-            const forward = new THREE.Vector3();
-            const right = new THREE.Vector3();
-            camera.getWorldDirection(forward);
-            forward.y = 0;
-            forward.normalize();
-            right.crossVectors(new THREE.Vector3(0, 1, 0), forward);
-            
-            camera.position.x += (right.x * leftStickX + forward.x * leftStickY) * speed;
-            camera.position.z += (right.z * leftStickX + forward.z * leftStickY) * speed;
-        }
-
-        // ========== BOTÓN VR ==========
-        const vrBtn = document.getElementById('vrBtn');
-        vrBtn.onclick = async () => {
-            try {
-                if (renderer.xr.isPresenting) {
-                    await renderer.xr.getSession()?.end();
-                    vrBtn.textContent = '🔮 ENTER VR';
-                    isInVR = false;
-                } else {
-                    const session = await navigator.xr.requestSession('immersive-vr', {
-                        requiredFeatures: ['local-floor']
-                    });
-                    await renderer.xr.setSession(session);
-                    vrBtn.textContent = '⬅️ SALIR VR';
-                    isInVR = true;
-                    setTimeout(() => {
-                        setupController();
-                        setupVRMovement();
-                    }, 500);
-                    scoreDiv.innerHTML = '🥽 En VR! Mueve la espada hacia las frutas';
-                }
-            } catch(err) {
-                console.error(err);
-                alert('Error: ' + err.message);
-            }
-        };
-
-        // ========== EVENTOS VR ==========
-        renderer.xr.addEventListener('sessionstart', () => {
-            console.log('🥽 VR iniciada');
-            scoreDiv.innerHTML = '🥽 En VR! Acerca el PUNTO ROJO a las frutas';
-        });
-
-        renderer.xr.addEventListener('sessionend', () => {
-            isInVR = false;
-            scoreDiv.innerHTML = '✅ Cargado';
-        });
-
-        // ========== LOOP PRINCIPAL ==========
-        let lastTime = 0;
-
-        function animate() {
-            const now = performance.now();
-            let delta = Math.min(0.033, (now - lastTime) / 1000);
-            lastTime = now;
-            
-            applyMovement(delta);
-            updateSword();
-            updateFruits(delta);
-            
-            renderer.render(scene, camera);
-            requestAnimationFrame(animate);
-        }
-        
-        animate();
-        
-        console.log('🗡️ SLICE MASTER VR - TEST');
-        console.log('🎯 Busca el PUNTO ROJO, acércalo a las frutas');
-    </script>
+    <script type="module" src="js/main.js"></script>
 </body>
 </html>
